@@ -1,0 +1,129 @@
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+    import {
+      getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+    } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
+    import {
+      getFirestore, doc, getDoc, setDoc
+    } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
+
+    // ---- 1. Fill this in with your own Firebase project config ----
+    const firebaseConfig = {
+      apiKey: 'YOUR_API_KEY',
+      authDomain: 'YOUR_PROJECT.firebaseapp.com',
+      projectId: 'YOUR_PROJECT_ID',
+      storageBucket: 'YOUR_PROJECT.appspot.com',
+      messagingSenderId: 'YOUR_SENDER_ID',
+      appId: 'YOUR_APP_ID'
+    };
+    const isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('YOUR_'));
+
+    const statusEl = document.getElementById('sync-status');
+    const authBtn = document.getElementById('auth-btn');
+
+    function setStatus(text, mode) {
+      if (!statusEl) return;
+      statusEl.textContent = text;
+      statusEl.className = 'sync-status' + (mode ? ' ' + mode : '');
+    }
+
+    if (!isConfigured) {
+      // No project configured yet — keep the button visible as a hint, but make
+      // it a no-op instead of throwing, so the rest of the app is unaffected.
+      setStatus('', '');
+      authBtn.title = 'Cloud sync not configured — see firebaseConfig in index.html';
+      authBtn.textContent = '⇥';
+      window.handleAuthClick = () => {
+        alert('Cloud sync isn\'t set up yet.\n\nAdd your Firebase project config to the firebaseConfig object near the bottom of index.html to enable Google sign-in and cross-device sync.');
+      };
+    } else {
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+      const provider = new GoogleAuthProvider();
+
+      let currentUser = null;
+      let saveTimer = null;
+      let applyingRemoteUpdate = false; // guards against re-saving what we just loaded
+
+      function protocolDocRef(uid) {
+        return doc(db, 'users', uid, 'data', 'protocols');
+      }
+
+      window.handleAuthClick = async function () {
+        if (currentUser) {
+          if (!confirm('Sign out of cloud sync? Your protocols stay saved to your account, but this device will stop syncing until you sign in again.')) return;
+          await signOut(auth);
+          return;
+        }
+        try {
+          setStatus('Signing in…', 'syncing');
+          await signInWithPopup(auth, provider);
+        } catch (err) {
+          console.error('Sign-in failed', err);
+          setStatus('Sign-in failed', 'offline');
+        }
+      };
+
+      onAuthStateChanged(auth, async (user) => {
+        currentUser = user;
+        if (!user) {
+          setStatus('Not signed in — saved on this device only', '');
+          authBtn.textContent = '⇥';
+          authBtn.style.background = '';
+          authBtn.querySelector('img')?.remove();
+          return;
+        }
+
+        // Show the user's Google avatar on the profile button if available.
+        authBtn.textContent = '';
+        authBtn.querySelectorAll('img').forEach(el => el.remove());
+        if (user.photoURL) {
+          const img = document.createElement('img');
+          img.src = user.photoURL;
+          img.alt = user.displayName || 'Signed in';
+          authBtn.appendChild(img);
+        } else {
+          authBtn.textContent = (user.displayName || user.email || '?').slice(0, 2).toUpperCase();
+        }
+        authBtn.title = 'Signed in as ' + (user.displayName || user.email) + ' — click to sign out';
+
+        setStatus('Syncing…', 'syncing');
+        try {
+          const snap = await getDoc(protocolDocRef(user.uid));
+          applyingRemoteUpdate = true;
+          if (snap.exists() && Array.isArray(snap.data().protocols)) {
+            window.replaceAllProtocols(snap.data().protocols);
+          } else {
+            // First sign-in on this account: push whatever is currently on this
+            // device up as the starting cloud copy, rather than wiping it.
+            await setDoc(protocolDocRef(user.uid), { protocols: window.getCurrentProtocols ? window.getCurrentProtocols() : [] });
+          }
+          applyingRemoteUpdate = false;
+          setStatus('Synced', 'synced');
+        } catch (err) {
+          applyingRemoteUpdate = false;
+          console.error('Cloud load failed', err);
+          setStatus('Sync error — working offline', 'offline');
+        }
+      });
+
+      // Called by renderProtocolLists() in the main script every time the
+      // protocols array changes. Debounced so rapid edits (checking several
+      // steps quickly, etc.) don't fire a write per keystroke/click.
+      window.onProtocolsChanged = function (protocols) {
+        if (!currentUser || applyingRemoteUpdate) return;
+        setStatus('Saving…', 'syncing');
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async () => {
+          try {
+            await setDoc(protocolDocRef(currentUser.uid), { protocols });
+            setStatus('Synced', 'synced');
+          } catch (err) {
+            console.error('Cloud save failed', err);
+            setStatus('Sync error — changes kept locally', 'offline');
+          }
+        }, 800);
+      };
+
+      setStatus('Not signed in — saved on this device only', '');
+    }

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LAB/CALC — Experiment Tracker</title>
+  <meta name="description" content="A bench toolbox for lab experiments: protocol tracking, timers, dilution and molarity calculators, cell counting, calibration curves, and a quick-reference biology/chemistry library.">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#7655e7">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="LAB/CALC">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">LAB<i>/</i>CALC</div>
+      <div class="date">Will be updated</div>
+      <div id="sync-status" class="sync-status" title="Cloud sync status"></div>
+      <button id="auth-btn" class="profile" aria-label="Sign in with Google" onclick="handleAuthClick()">⇥</button>
+    </header>
+
+    <section id="home" class="view active">
+      <div class="intro">
+        <div><h1>Hi,<br>researcher.</h1><p>Plan you experiments neatly, and execute them without failure!</p></div>
+        <button class="new-btn" onclick="openNewProtocol()">+ NEW EXPERIMENT</button>
+      </div>
+      <div class="dash">
+        <section>
+          <div class="section-title"><span>Current protocols</span><span id="protocol-count">00 active</span></div>
+          <div class="card protocols" id="protocols"></div>
+        </section>
+        <aside class="side">
+          <section>
+            <div class="section-title" style="align-items: center;">
+              <div class="tool-tabs" data-group="sidebar" style="margin-bottom: 0;">
+                <button class="tool-tab active" data-tool-view="side-notes">NOTES</button>
+                <button class="tool-tab" data-tool-view="side-tasks">TASKS</button>
+              </div>
+              <span id="task-count" style="display: none;">02 / 04</span>
+            </div>
+            <div class="card today">
+              <!-- Tab 1: Basic Notes -->
+              <div id="side-notes" class="tool-view active">
+                <textarea class="note-area" placeholder="Jot down quick thoughts..."></textarea>
+              </div>
+              <!-- Tab 2: Tasks -->
+              <!-- Tab 2: Tasks -->
+                <div id="side-tasks" class="tool-view">
+                  <h2 style="margin: 0 0 15px; font-size: 18px;">Keep it moving.</h2>
+                  <div id="task-list" style="display: grid; gap: 6px; min-height: 40px;">
+                  </div>
+                 <input id="new-task-input" class="input" type="text" placeholder="+ Add a task (Press Enter)" style="width: 100%; margin-top: 10px; background: rgba(255,255,255,.5); border-color: rgba(24,32,52,.3);">
+                </div>
+            </div>
+          </section>
+          <section><div class="section-title"><span>Basic tools</span></div><div class="tool-grid"><button class="tool" onclick="goToTool('tool-timer')"><b>◷</b><small>Timer</small></button><button class="tool" onclick="goToTool('tool-calculator')"><b>÷</b><small>Calculator</small></button><button class="tool" onclick="goToTool('tool-dilution')"><b>⚗</b><small>Dilution</small></button></div></section>
+        </aside>
+      </div>
+    </section>
+
+    <section id="protocol" class="view"><div class="intro"><div><h1>Protocol archive.</h1><p>Every experiment, protocol and useful failure in one compact index.</p></div><button class="new-btn" onclick="openNewProtocol()">+ NEW EXPERIMENT</button></div><div class="card protocols" id="archive"></div></section>
+    <section id="tools" class="view tool-panel">
+      <div class="intro"><div><h1>Bench tools.</h1><p>A bench toolbox for focus, counting, and math.</p></div></div>
+      <div class="tool-suite">
+        <section class="card tool-card" id="tool-timer"><h2>01 — Timer</h2>
+          <div class="tool-tabs" data-group="timer"><button class="tool-tab active" data-tool-view="timers">TIMER</button><button class="tool-tab" data-tool-view="stopwatch">STOPWATCH</button></div>
+          <div id="timers" class="tool-view active"><div class="timer-form"><input id="timer-name" class="input" placeholder="timer name" value="Incubation"><label class="mini-label"><input id="timer-hours" class="number-input" type="number" min="0" value="0"><em>HR</em></label><label class="mini-label"><input id="timer-minutes" class="number-input" type="number" min="0" max="59" value="25"><em>MIN</em></label><label class="mini-label"><input id="timer-seconds" class="number-input" type="number" min="0" max="59" value="0"><em>SEC</em></label><button class="action" onclick="createTimer()">+ ADD TIMER</button></div><div id="timer-list" class="timer-list"></div></div>
+          <div id="stopwatch" class="tool-view"><div class="stopwatch"><div id="stopwatch-time" class="stopwatch-time">00:00.0</div><div class="stopwatch-controls"><button class="action" id="stopwatch-start" onclick="toggleStopwatch()">START</button><button class="small-btn" onclick="lapStopwatch()">LAP</button><button class="small-btn" onclick="resetStopwatch()">RESET</button></div><div id="lap-list" class="lap-list"></div></div></div>
+        </section>
+        <section class="card tool-card"><h2>02 — Counter</h2>
+          <div class="tool-tabs" data-group="counter"><button class="tool-tab active" data-tool-view="single-counter">SINGLE</button><button class="tool-tab" data-tool-view="multi-counter">MULTI</button><button class="tool-tab" data-tool-view="blood-counter">BLOOD CELL</button></div>
+          <div id="single-counter" class="tool-view active"><div class="counter-main"><div id="single-value" class="counter-value">0</div><div class="counter-actions"><button onclick="changeSingle(1)">+</button><button onclick="changeSingle(-1)">−</button></div></div></div>
+          <div id="multi-counter" class="tool-view"><div class="timer-form"><input id="counter-name" class="input" placeholder="counter name"><button class="action" style="grid-column:span 4" onclick="createCounter()">+ ADD COUNTER</button></div><div id="counter-list" class="timer-list"></div></div>
+          <div id="blood-counter" class="tool-view"><div class="blood-grid" id="blood-grid"></div></div>
+        </section>
+        <section class="card tool-card" id="tool-calculator"><h2>03 — Calculator</h2><div class="calculator"><div><div class="calc-display"><div id="calc-expression"></div><div id="calc-output">0</div></div><div id="calc-keys" class="calc-keys"></div></div><aside class="history"><div style="display:flex;justify-content:space-between;align-items:start"><h3>History</h3><button class="small-btn" onclick="clearCalcHistory()">CLEAR</button></div><div id="history-list"><span style="font-size:11px;color:var(--muted)">No calculations yet.</span></div></aside></div></section>
+        <section class="card tool-card" id="tool-dilution"><h2>04 — Dilution</h2>
+          <div class="tool-tabs" data-group="dilution"><button class="tool-tab active" data-tool-view="dilution-basic">DILUTION</button><button class="tool-tab" data-tool-view="serial-dilution">SERIAL</button><button class="tool-tab" data-tool-view="reverse-dilution">REVERSE</button><button class="tool-tab" data-tool-view="solution-maker">MAKE SOLUTION</button></div>
+          <div id="dilution-basic" class="tool-view active"><p class="formula">Formula: <code>C₁V₁ = C₂V₂</code> — find the volume of stock needed.</p><div class="calc-form"><label class="field">STOCK CONCENTRATION <div class="unit-input"><input id="d-c1" type="number" value="10"><select id="d-c1u"><option>M</option><option>mM</option><option>µM</option></select></div></label><label class="field">TARGET CONCENTRATION <div class="unit-input"><input id="d-c2" type="number" value="1"><select id="d-c2u"><option>M</option><option selected>mM</option><option>µM</option></select></div></label><label class="field span-all">FINAL VOLUME <div class="unit-input"><input id="d-v2" type="number" value="10"><select id="d-v2u"><option>L</option><option selected>mL</option><option>µL</option></select></div></label><button class="action span-all" onclick="calcDilution()">CALCULATE</button><div id="d-result" class="result">Enter values, then calculate.</div></div></div>
+          <div id="serial-dilution" class="tool-view"><p class="formula">Formula per tube: <code>V transfer = V final ÷ dilution factor</code>. Each tube is diluted from the previous tube.</p><div class="calc-form"><label class="field">START CONCENTRATION <div class="unit-input"><input id="s-start" type="number" value="10"><select id="s-startu"><option>M</option><option selected>mM</option><option>µM</option></select></div></label><label class="field">DILUTION FACTOR <input id="s-factor" class="input" type="number" value="10"></label><label class="field">NUMBER OF TUBES <input id="s-tubes" class="input" type="number" value="5"></label><label class="field">FINAL VOLUME / TUBE <div class="unit-input"><input id="s-volume" type="number" value="1"><select id="s-unit"><option>L</option><option selected>mL</option><option>µL</option></select></div></label><button class="action span-all" onclick="calcSerial()">BUILD SERIES</button><div id="s-result" class="result">A transfer plan will appear here.</div></div></div>
+          <div id="reverse-dilution" class="tool-view"><p class="formula">Formula: <code>C₁ = C₂V₂ ÷ V₁</code> — find the concentration required before bringing the sample to final volume.</p><div class="calc-form"><label class="field">FINAL CONCENTRATION <div class="unit-input"><input id="r-c2" type="number" value="1"><select id="r-c2u"><option>M</option><option selected>mM</option><option>µM</option></select></div></label><label class="field">FINAL VOLUME <div class="unit-input"><input id="r-v2" type="number" value="10"><select id="r-v2u"><option>L</option><option selected>mL</option><option>µL</option></select></div></label><label class="field span-all">STARTING VOLUME <div class="unit-input"><input id="r-v1" type="number" value="2"><select id="r-v1u"><option>L</option><option selected>mL</option><option>µL</option></select></div></label><button class="action span-all" onclick="calcReverse()">CALCULATE</button><div id="r-result" class="result">Enter values, then calculate.</div></div></div>
+          <div id="solution-maker" class="tool-view"><p class="formula">Formula: <code>mass (g) = M × V (L) × molecular weight</code>.</p><div class="calc-form"><label class="field">TARGET MOLARITY <div class="unit-input"><input id="sol-m" type="number" value="100"><select id="sol-mu"><option>M</option><option selected>mM</option><option>µM</option></select></div></label><label class="field">MOLECULAR WEIGHT <div class="unit-input"><input id="sol-mw" type="number" value="58.44"><select><option>g/mol</option></select></div></label><label class="field span-all">FINAL VOLUME <div class="unit-input"><input id="sol-v" type="number" value="500"><select id="sol-vu"><option>L</option><option selected>mL</option><option>µL</option></select></div></label><button class="action span-all" onclick="calcSolution()">CALCULATE MASS</button><div id="sol-result" class="result">Enter values, then calculate.</div></div></div>
+        </section>
+        <section class="card tool-card">
+          <h2>05 — Medium / Buffer maker</h2>
+          <div class="buffer-layout">
+            <div>
+              <p class="formula">Prepare components using either <code>Stock Solutions</code> (C1•V1 = C2•V2) or <code>Powder</code> (mass = M•V•MW).</p>
+              <div class="calc-form">
+                <label class="field">
+                  RECIPE NAME
+                  <input class="input" id="buffer-name" placeholder="e.g. DMEM complete media" value="Medium / Buffer 1">
+                </label>
+                <label class="field">
+                  FINAL VOLUME
+                  <div class="unit-input">
+                    <input id="buffer-volume" type="number" placeholder="e.g. 500" value="500">
+                    <select id="buffer-unit"><option>L</option><option selected>mL</option><option>µL</option></select>
+                  </div>
+                </label>
+              </div>
+              <div id="components" class="component-list"></div>
+              <button class="small-btn" style="margin-top:10px" onclick="addComponent('stock')">+ ADD STOCK COMPONENT</button>
+              <button class="small-btn" style="margin-top:10px; margin-left: 5px;" onclick="addComponent('powder')">+ ADD POWDER COMPONENT</button>
+              <button class="action" style="float:right;margin-top:10px" onclick="saveBuffer()">SAVE AS PROTOCOL</button>
+            </div>
+            <div class="buffer-summary" id="buffer-summary">
+              <div><span>Final volume</span><b>0 mL</b></div>
+              <div><span>Stock / Solute total</span><b>0 mL / g</b></div>
+              <div><span>Solvent</span><b>0 mL</b></div>
+            </div>
+          </div>
+        </section>
+        <section class="card tool-card"><h2>06 — Molarity calculator</h2><div class="tool-tabs" data-group="molarity"><button class="tool-tab active" data-tool-view="moles-volume">MOLES → VOLUME</button><button class="tool-tab" data-tool-view="mass-mw">MASS → MW</button></div><div id="moles-volume" class="tool-view active"><p class="formula">Formula: <code>M = n ÷ V</code>.</p><div class="calc-form"><label class="field">AMOUNT (n)<div class="unit-input"><input id="mv-n" type="number" value="2"><select id="mv-nu"><option>mol</option><option selected>mmol</option><option>µmol</option></select></div></label><label class="field">VOLUME (V)<div class="unit-input"><input id="mv-v" type="number" value="100"><select id="mv-vu"><option>L</option><option selected>mL</option><option>µL</option></select></div></label><button class="action span-all" onclick="calcMolesVolume()">CALCULATE MOLARITY</button><div id="mv-result" class="result">Enter values, then calculate.</div></div></div><div id="mass-mw" class="tool-view"><p class="formula">Formula: <code>M = mass ÷ (MW × V)</code>.</p><div class="calc-form"><label class="field">MASS<div class="unit-input"><input id="mm-mass" type="number" value="5"><select id="mm-massu"><option>g</option><option selected>mg</option><option>µg</option></select></div></label><label class="field">MOLECULAR WEIGHT<div class="unit-input"><input id="mm-mw" type="number" value="180.16"><select><option>g/mol</option></select></div></label><label class="field span-all">VOLUME<div class="unit-input"><input id="mm-vol" type="number" value="100"><select id="mm-volu"><option>L</option><option selected>mL</option><option>µL</option></select></div></label><button class="action span-all" onclick="calcMassMW()">CALCULATE MOLARITY</button><div id="mm-result" class="result">Enter values, then calculate.</div></div></div></section>
+        <section class="card tool-card"><h2>07 — Cell counter</h2><p class="formula" id="cell-formula">Tap each selected square to tally cells. WBC: <code>average × dilution × 10⁴</code> cells/mL; RBC uses the combined volume of its five selected central squares.</p><div class="count-setup"><b style="display:block;margin-bottom:9px">COUNT SETUP</b><div class="tool-tabs" data-group="celltype"><button class="tool-tab active" data-tool-view="cell-wbc">LARGE CELLS / WBC</button><button class="tool-tab" data-tool-view="cell-rbc">SMALL CELLS / RBC</button></div></div><div id="cell-wbc" class="tool-view active"></div><div id="cell-rbc" class="tool-view"></div><div style="margin-top: 14px; display: grid; gap: 12px;">
+      <!-- Unified Top Row: Counters & Calculation Controls -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+        
+        <div class="cell-count">
+          <b>VIABLE CELLS</b>
+          <span class="count-number" id="viable-count">0</span>
+          <button onclick="adjustCells('viable',1)">+</button> 
+          <button onclick="adjustCells('viable',-1)">−</button>
+        </div>
+        
+        <div class="cell-count dead">
+          <b>NON-VIABLE</b>
+          <span class="count-number" id="dead-count">0</span>
+          <button onclick="adjustCells('dead',1)">+</button> 
+          <button onclick="adjustCells('dead',-1)">−</button>
+        </div>
+        
+        <!-- Dilution, Calculate, and Reset moved here -->
+        <div class="calc-form" style="display: flex; flex-direction: column; gap: 8px;">
+          <label class="field">DILUTION FACTOR<input id="cell-dilution" class="input" type="number" value="2"></label>
+          <button class="action" onclick="calcCells()" style="flex: 1;">CALCULATE SAMPLE</button>
+          <button class="action" onclick="resetCells()" style="flex: 1; background: white;">RESET COUNTS</button>
+        </div>
+      </div>
+      <div id="cell-result" class="cell-result">Select a count mode and tap the chosen squares.</div>
+    </div>
+        </section>
+
+        <section class="card tool-card">
+          <h2>08 — Cell culture</h2>
+          <p class="formula">Track confluence toward a splitting target, then log the passage. Formula: <code>t = Td × log₂(Ctarget ÷ C₀)</code>.</p>
+
+          <div class="culture-slider-field">
+            <div class="culture-slider-head"><span>CURRENT CONFLUENCE (C₀)</span><b id="culture-current-label">30%</b></div>
+            <input id="culture-current" type="range" min="0" max="100" value="30" oninput="renderCultureTrack()">
+          </div>
+          <div class="culture-slider-field">
+            <div class="culture-slider-head"><span>TARGET CONFLUENCE (Ctarget)</span><b id="culture-target-label">80%</b></div>
+            <input id="culture-target" type="range" min="0" max="100" value="80" oninput="renderCultureTrack()">
+          </div>
+
+          <div class="culture-track" id="culture-track">
+            <i id="culture-track-fill"></i>
+            <div class="culture-dot start" id="culture-dot-start"></div>
+            <div class="culture-marker start" id="culture-marker-start">Current: 30%</div>
+            <div class="culture-dot target" id="culture-dot-target"></div>
+            <div class="culture-marker target" id="culture-marker-target">Target: 80%</div>
+          </div>
+
+          <div class="calc-form" style="margin-top:16px">
+            <label class="field">DOUBLING TIME (Td) h<input id="culture-doubling" class="input" type="number" placeholder="e.g. 24"></label>
+          </div>
+
+          <div class="culture-eta" style="margin-top:12px">
+            <span>Time until splitting</span>
+            <span id="culture-eta-value">Not calculated yet</span>
+          </div>
+          <button class="action span-all" onclick="calcCultureTiming()" style="width:100%">CALCULATE SPLITTING TIME</button>
+
+          <hr style="border:0;border-top:1.5px solid var(--line);margin:20px 0">
+
+          <b style="display:block;margin-bottom:10px;font-size:12px">PASSAGE HISTORY</b>
+          <div class="passage-head">
+            <button class="small-btn" onclick="adjustPassage(-1)">←</button>
+            <div>
+              <span class="passage-number" id="passage-number">P0</span>
+              <small id="passage-date">Not logged yet</small>
+            </div>
+            <button class="action" onclick="logPassage()">+ PASSAGE</button>
+          </div>
+
+          <div class="calc-form">
+            <label class="field span-all">CULTURE MEDIUM<input id="culture-medium" class="input" placeholder="e.g. DMEM + 10% FBS"></label>
+            <label class="field span-all">ANTIBIOTIC<input id="culture-antibiotic" class="input" placeholder="e.g. Pen/Strep"></label>
+            <label class="field span-all">INCUBATION CONDITIONS<input id="culture-incubation" class="input" placeholder="e.g. 37°C, 5% CO₂"></label>
+          </div>
+
+          <div id="passage-log" class="timer-list" style="margin-top:12px"></div>
+        </section>
+
+        <section class="card tool-card">
+          <h2>09 — Calibration curve</h2>
+          <div class="tool-tabs" data-group="calibration">
+            <button class="tool-tab active" data-tool-view="calib-linear">LINEAR</button>
+            <button class="tool-tab" data-tool-view="calib-exponential">EXPONENTIAL</button>
+            <button class="tool-tab" data-tool-view="calib-curve">CURVE</button>
+          </div>
+
+          <div id="calib-linear" class="tool-view active">
+            <p class="formula">Fit: <code>y = m·x + c</code>. Add at least two data points to preview the graph.</p>
+          </div>
+          <div id="calib-exponential" class="tool-view">
+            <p class="formula">Fit: <code>y = a·e<sup>b·x</sup></code>. Add at least two positive-y data points to preview the graph.</p>
+          </div>
+          <div id="calib-curve" class="tool-view">
+            <p class="formula">Fit: <code>Smooth free-form spline/curve</code> connecting random points via SVG Bézier interpolation.</p>
+          </div>
+
+          <div class="calib-axis-labels">
+            <input id="calib-xlabel" placeholder="X axis title (e.g. Time (h))" oninput="renderCalibrationGraph()">
+            <input id="calib-ylabel" placeholder="Y axis title (e.g. OD600)" oninput="renderCalibrationGraph()">
+          </div>
+
+          <div class="calib-graph" id="calib-graph">
+            <div class="calib-empty" id="calib-empty">Add valid points to preview the graph.</div>
+            <svg id="calib-svg" viewBox="0 0 300 190" style="display:none"></svg>
+          </div>
+
+          <div class="card" style="padding:14px;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <b style="font-size:13px">Data points</b>
+            </div>
+            <div id="calib-points"></div>
+            <button class="calib-add" onclick="addCalibPoint()">+ Add data point</button>
+          </div>
+
+          <div class="card" style="padding:14px">
+            <b style="font-size:13px">Sample</b>
+            <p class="formula" style="margin-top:6px">Enter x or y. The other value is calculated automatically from the fitted curve.</p>
+            <div id="calib-samples"></div>
+            <button class="calib-add" onclick="addCalibSample()">+ Add sample</button>
+          </div>
+        </section>
+      </div>
+    </section>
+    <section id="library" class="view library"><div class="intro"><div><h1>Lab library.</h1><p>Quick-reference building blocks for biology and chemistry work.</p></div></div>
+      <section class="card library-block"><button class="library-head" onclick="toggleLibrary(this)">01 — AMINO ACID DETAILS <span>+</span></button><div class="library-body"><p class="formula">Expand a chemical category to view each amino acid, its one- and three-letter codes, and a compact side-chain notation.</p><div id="amino-acids"></div></div></section>
+      <section class="card library-block"><button class="library-head" onclick="toggleLibrary(this)">02 — CODON CHART <span>+</span></button><div class="library-body"><p class="formula">RNA codons. Stop codons are shown in red.</p><div id="codon-chart" class="codon-grid"></div></div></section>
+      <section class="card library-block"><button class="library-head" onclick="toggleLibrary(this)">03 — PERIODIC TABLE <span>+</span></button><div class="library-body"><div id="periodic-legend" class="legend"></div><div class="periodic-wrap"><div id="periodic-table" class="periodic"></div></div></div></section>
+    </section>
+  </main>
+
+  <nav class="dock" aria-label="Primary navigation">
+    <button class="tab active" data-view="home"><b>⌂</b>HOME</button>
+    <button class="tab" data-view="protocol"><b>▣</b>PROTOCOL</button>
+    <button class="tab" data-view="tools"><b>✦</b>TOOLS</button>
+    <button class="tab" data-view="library"><b>▤</b>LIBRARY</button>
+  </nav>
+  <div id="element-modal" class="element-modal" onclick="if(event.target===this)this.classList.remove('open')"><div class="element-detail"><button class="small-btn" style="float:right" onclick="document.querySelector('#element-modal').classList.remove('open')">CLOSE</button><h2 id="element-title"></h2><dl id="element-info"></dl></div></div>
+
+  <!-- New-experiment naming step -->
+  <div id="new-protocol-modal" class="proto-modal" onclick="if(event.target===this)closeNewProtocol()">
+    <div class="proto-sheet">
+      <div class="proto-sheet-head"><h2>New experiment</h2><button class="proto-close" onclick="closeNewProtocol()">×</button></div>
+      <label class="field" style="margin-bottom:6px">EXPERIMENT NAME</label>
+      <input id="new-protocol-name" class="proto-name-input" placeholder="e.g. CRISPR viability screen">
+      <button class="action span-all" style="width:100%" onclick="confirmProtocolName()">NEXT: ADD FIRST STEP</button>
+    </div>
+  </div>
+
+  <!-- Step entry (used for first step and for "add more steps") -->
+  <div id="step-entry-modal" class="proto-modal" onclick="if(event.target===this)closeStepEntry()">
+    <div class="proto-sheet">
+      <div class="proto-sheet-head"><h2 id="step-entry-title">Add step</h2><button class="proto-close" onclick="closeStepEntry()">×</button></div>
+      <div class="proto-step-form">
+        <label>STEP NAME<input id="step-entry-name" placeholder="e.g. Seed cells into wells"></label>
+        <label>STEP DESCRIPTION<textarea id="step-entry-desc" placeholder="e.g. Seed 5,000 cells/well in 100 µL complete media"></textarea></label>
+      </div>
+      <div class="proto-actions">
+        <button class="action" style="background:white" onclick="finishStepEntry()">DONE</button>
+        <button class="action" onclick="addAnotherStepFromEntry()">+ ADD MORE STEPS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Protocol editor: steps, checkboxes, refer-tool -->
+  <div id="protocol-editor-modal" class="proto-modal" onclick="if(event.target===this)closeProtocolEditor()">
+    <div class="proto-sheet">
+      <div class="proto-sheet-head"><h2 id="editor-protocol-name">Protocol</h2><button class="proto-close" onclick="closeProtocolEditor()">×</button></div>
+      <div class="proto-progress-row">
+        <span id="editor-progress-label">0 / 0</span>
+        <div class="proto-progress-track"><i id="editor-progress-fill" style="width:0%"></i></div>
+      </div>
+      <div id="editor-steps"></div>
+      <button class="proto-add-step-btn" onclick="addStepToOpenProtocol()">+ ADD ANOTHER STEP</button>
+    </div>
+  </div>
+
+  <!-- Refer tool picker -->
+  <div id="tool-picker-modal" class="proto-modal" onclick="if(event.target===this)closeToolPicker()">
+    <div class="proto-sheet">
+      <div class="proto-sheet-head"><h2>Refer tools</h2><button class="proto-close" onclick="closeToolPicker()">×</button></div>
+      <p class="formula">Select any tools relevant to this step. They'll be listed under it for quick reference.</p>
+      <div id="tool-picker-list" class="proto-tool-list"></div>
+      <button class="action span-all" style="width:100%" onclick="closeToolPicker()">DONE</button>
+    </div>
+  </div>
+
+  <script src="app.js" defer></script>
+
+  <!--
+    ============================================================
+    FIREBASE SYNC (Google Sign-In + Firestore)
+    ============================================================
+    This makes protocols/experiments follow the signed-in user
+    across devices. To activate it:
+
+    1. Create a project at https://console.firebase.google.com
+    2. Enable Authentication -> Sign-in method -> Google.
+    3. Create a Firestore database (any region, production or
+       test rules to start).
+    4. Project settings -> General -> "Your apps" -> Web app ->
+       copy the config object and paste it below as
+       `firebaseConfig`.
+    5. In Firestore rules, restrict each user to their own
+       document, e.g.:
+         match /users/{uid}/data/{doc} {
+           allow read, write: if request.auth != null && request.auth.uid == uid;
+         }
+
+    Until firebaseConfig is filled in, the app runs exactly as
+    before: fully usable, everything just stays local to this
+    browser tab/device.
+  -->
+  <script type="module" src="firebase-sync.js"></script>
+
+  <script>
+    // Registers the service worker for offline support / installability.
+    // Runs after app.js has loaded (deferred scripts execute in order),
+    // and fails silently on file:// or unsupported browsers rather than
+    // breaking the rest of the app.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((err) => {
+          console.warn('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
