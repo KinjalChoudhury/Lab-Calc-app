@@ -8,12 +8,12 @@
 
     // ---- 1. Fill this in with your own Firebase project config ----
     const firebaseConfig = {
-      apiKey: 'YOUR_API_KEY',
-      authDomain: 'YOUR_PROJECT.firebaseapp.com',
-      projectId: 'YOUR_PROJECT_ID',
-      storageBucket: 'YOUR_PROJECT.appspot.com',
-      messagingSenderId: 'YOUR_SENDER_ID',
-      appId: 'YOUR_APP_ID'
+      apiKey: 'AIzaSyDl2HNDI-WQTIAN5ouJCLwwDwEV_W6wYEk',
+      authDomain: 'lab-calc-app-77c0a.firebaseapp.com',
+      projectId: 'lab-calc-app-77c0a',
+      storageBucket: 'lab-calc-app-77c0a.firebasestorage.app',
+      messagingSenderId: '335546266611',
+      appId: '1:335546266611:web:e4a6ddfd558e73b97cd886'
     };
     const isConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith('YOUR_'));
 
