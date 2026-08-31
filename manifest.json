@@ -1,5 +1,5 @@
 {
-  "name": "LAB/CALC — Experiment Tracker",
+  "name": "LAB/CALC",
   "short_name": "LAB/CALC",
   "description": "A bench toolbox for lab experiments: protocol tracking, timers, dilution and molarity calculators, cell counting, calibration curves, and a quick-reference biology/chemistry library.",
   "start_url": "./index.html",
