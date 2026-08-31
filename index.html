@@ -24,7 +24,10 @@
       <div class="brand">LAB<i>/</i>CALC</div>
       <div class="date">Will be updated</div>
       <div id="sync-status" class="sync-status" title="Cloud sync status"></div>
-      <button id="auth-btn" class="profile" aria-label="Sign in with Google" onclick="handleAuthClick()">⇥</button>
+      <div class="auth-group">
+        <button id="auth-btn" class="profile" aria-label="Sign in with Google" onclick="handleAuthClick()">⇥</button>
+        <button id="signout-btn" class="signout-btn" aria-label="Sign out" onclick="handleSignOutClick()" hidden>Sign out</button>
+      </div>
     </header>
 
     <section id="home" class="view active">
@@ -93,7 +96,7 @@
           <h2>05 — Medium / Buffer maker</h2>
           <div class="buffer-layout">
             <div>
-              <p class="formula">Prepare components using either <code>Stock Solutions</code> (C1•V1 = C2•V2) or <code>Powder</code> (mass = M•V•MW).</p>
+              <p class="formula">Prepare components using either <code>Stock Solutions</code> ($C_1V_1 = C_2V_2$) or <code>Powder</code> ($mass = M \times V \times MW$).</p>
               <div class="calc-form">
                 <label class="field">
                   RECIPE NAME
@@ -296,6 +299,11 @@
       </div>
       <div id="editor-steps"></div>
       <button class="proto-add-step-btn" onclick="addStepToOpenProtocol()">+ ADD ANOTHER STEP</button>
+
+      <div class="proto-notes-block">
+        <label class="proto-notes-label" for="editor-notes">NOTES</label>
+        <textarea id="editor-notes" class="proto-notes-area" rows="3" placeholder="General notes for this protocol — observations, deviations, reminders…"></textarea>
+      </div>
     </div>
   </div>
 

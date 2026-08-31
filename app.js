@@ -18,7 +18,7 @@
     function confirmProtocolName() {
       const name = document.querySelector('#new-protocol-name').value.trim();
       if (!name) return;
-      draftProtocol = { id: 'p' + (++protocolSeq), name, steps: [] };
+      draftProtocol = { id: 'p' + (++protocolSeq), name, steps: [], notes: '' };
       closeAllProtoModals();
       openStepEntry('draft', 'Step 1');
     }
@@ -135,10 +135,15 @@
     function renderProtocolEditor() {
       const proto = protocols.find(p => p.id === openProtocolId);
       if (!proto) return;
+      if (typeof proto.notes !== 'string') proto.notes = '';
       document.querySelector('#editor-protocol-name').textContent = proto.name;
       const { total, done, pct } = protocolMeta(proto);
       document.querySelector('#editor-progress-label').textContent = `${done} / ${total}`;
       document.querySelector('#editor-progress-fill').style.width = pct + '%';
+
+      const notesArea = document.querySelector('#editor-notes');
+      if (document.activeElement !== notesArea) notesArea.value = proto.notes;
+      notesArea.oninput = e => { proto.notes = e.target.value; };
 
       const wrap = document.querySelector('#editor-steps');
       wrap.innerHTML = '';
@@ -341,7 +346,8 @@ function updateBuffer() {
       protocols.unshift({
         id: 'p' + (++protocolSeq),
         name,
-        steps: [{ name: 'Prepare recipe', description: desc, done: true, tools: ['Medium / Buffer maker'] }]
+        steps: [{ name: 'Prepare recipe', description: desc, done: true, tools: ['Medium / Buffer maker'] }],
+        notes: ''
       });
       renderProtocolLists();
       alert('Recipe saved as a protocol.');

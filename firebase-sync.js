@@ -19,6 +19,7 @@
 
     const statusEl = document.getElementById('sync-status');
     const authBtn = document.getElementById('auth-btn');
+    const signOutBtn = document.getElementById('signout-btn');
 
     function setStatus(text, mode) {
       if (!statusEl) return;
@@ -35,6 +36,7 @@
       window.handleAuthClick = () => {
         alert('Cloud sync isn\'t set up yet.\n\nAdd your Firebase project config to the firebaseConfig object near the bottom of index.html to enable Google sign-in and cross-device sync.');
       };
+      window.handleSignOutClick = () => {};
     } else {
       const app = initializeApp(firebaseConfig);
       const auth = getAuth(app);
@@ -50,11 +52,7 @@
       }
 
       window.handleAuthClick = async function () {
-        if (currentUser) {
-          if (!confirm('Sign out of cloud sync? Your protocols stay saved to your account, but this device will stop syncing until you sign in again.')) return;
-          await signOut(auth);
-          return;
-        }
+        if (currentUser) return; // identity display only once signed in — use the dedicated Sign out button
         try {
           setStatus('Signing in…', 'syncing');
           await signInWithPopup(auth, provider);
@@ -64,13 +62,21 @@
         }
       };
 
+      window.handleSignOutClick = async function () {
+        if (!currentUser) return;
+        if (!confirm('Sign out of cloud sync? Your protocols stay saved to your account, but this device will stop syncing until you sign in again.')) return;
+        await signOut(auth);
+      };
+
       onAuthStateChanged(auth, async (user) => {
         currentUser = user;
         if (!user) {
           setStatus('Not signed in — saved on this device only', '');
           authBtn.textContent = '⇥';
           authBtn.style.background = '';
+          authBtn.title = 'Sign in with Google';
           authBtn.querySelector('img')?.remove();
+          signOutBtn.hidden = true;
           return;
         }
 
@@ -85,7 +91,8 @@
         } else {
           authBtn.textContent = (user.displayName || user.email || '?').slice(0, 2).toUpperCase();
         }
-        authBtn.title = 'Signed in as ' + (user.displayName || user.email) + ' — click to sign out';
+        authBtn.title = 'Signed in as ' + (user.displayName || user.email);
+        signOutBtn.hidden = false;
 
         setStatus('Syncing…', 'syncing');
         try {
