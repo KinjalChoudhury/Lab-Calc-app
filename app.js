@@ -219,16 +219,96 @@
       card.classList.add('highlight');
       setTimeout(() => card.classList.remove('highlight'), 1600);
     }
-    document.querySelectorAll('.tool-tabs').forEach(group => group.querySelectorAll('.tool-tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tool-tabs:not([data-group="viability"])').forEach(group => group.querySelectorAll('.tool-tab').forEach(tab => tab.addEventListener('click', () => {
     group.querySelectorAll('.tool-tab').forEach(x => x.classList.remove('active')); tab.classList.add('active');
     group.closest('.tool-card, section').querySelectorAll('.tool-view').forEach(x => x.classList.remove('active'));
     document.getElementById(tab.dataset.toolView).classList.add('active');
     })));
     const timers = [];
+    let timerSeq = 0;
     function fmt(seconds) { const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60; return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); }
-    function createTimer() { const name=document.querySelector('#timer-name').value.trim()||'Untitled timer'; const seconds=(+document.querySelector('#timer-hours').value||0)*3600+(+document.querySelector('#timer-minutes').value||0)*60+(+document.querySelector('#timer-seconds').value||0); if(!seconds) return; timers.push({name,seconds,running:false}); renderTimers(); }
-    function renderTimers() { const list=document.querySelector('#timer-list'); list.innerHTML=''; timers.forEach((timer,i) => { const row=document.createElement('div'); row.className='timer-row'; row.innerHTML=`<div><small>${timer.name}</small><strong>${fmt(timer.seconds)}</strong></div><button class="small-btn">${timer.running?'PAUSE':'START'}</button><button class="small-btn">×</button>`; row.querySelectorAll('button')[0].onclick=()=>{timer.running=!timer.running;renderTimers()}; row.querySelectorAll('button')[1].onclick=()=>{timers.splice(i,1);renderTimers()}; list.append(row); }); }
-    setInterval(()=>{ let change=false; timers.forEach(t=>{ if(t.running && t.seconds>0){t.seconds--;change=true;if(!t.seconds)t.running=false;} }); if(change)renderTimers(); },1000);
+    function createTimer() { const name=document.querySelector('#timer-name').value.trim()||'Untitled timer'; const seconds=(+document.querySelector('#timer-hours').value||0)*3600+(+document.querySelector('#timer-minutes').value||0)*60+(+document.querySelector('#timer-seconds').value||0); if(!seconds) return; timers.push({id:'t'+(++timerSeq),name,seconds,running:false,done:false}); renderTimers(); }
+    function renderTimers() {
+      const list=document.querySelector('#timer-list'); list.innerHTML='';
+      timers.forEach((timer,i) => {
+        const row=document.createElement('div');
+        row.className='timer-row' + (timer.done ? ' alarming' : '');
+        const actionBtn = timer.done ? `<button class="small-btn">STOP</button>` : `<button class="small-btn">${timer.running?'PAUSE':'START'}</button>`;
+        row.innerHTML=`<div><small>${timer.name}${timer.done ? ' — done' : ''}</small><strong>${fmt(timer.seconds)}</strong></div>${actionBtn}<button class="small-btn">×</button>`;
+        row.querySelectorAll('button')[0].onclick=()=>{
+          if (timer.done) { timer.done=false; stopTimerAlarm(timer.id); }
+          else { timer.running=!timer.running; }
+          renderTimers();
+        };
+        row.querySelectorAll('button')[1].onclick=()=>{
+          stopTimerAlarm(timer.id); // deleting a timer must silence its alarm, if it's the one ringing
+          timers.splice(i,1);
+          renderTimers();
+        };
+        list.append(row);
+      });
+    }
+    setInterval(()=>{
+      let change=false;
+      timers.forEach(t=>{
+        if (t.running && t.seconds>0) {
+          t.seconds--; change=true;
+          if (!t.seconds) { t.running=false; t.done=true; playTimerAlarm(t.id); }
+        }
+      });
+      if (change) renderTimers();
+    }, 1000);
+
+    // ---- Timer alarm sound (synthesized via Web Audio API — no external
+    // audio file needed, works fully offline). One alarm can be looping at a
+    // time per timer id; stopping/deleting that specific timer tears down
+    // exactly its own oscillator loop and nothing else's.
+    let alarmAudioCtx = null;
+    const activeAlarms = {}; // timer id -> { stop() }
+    function getAlarmAudioCtx() {
+      if (!alarmAudioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        alarmAudioCtx = new Ctx();
+      }
+      return alarmAudioCtx;
+    }
+    function playTimerAlarm(timerId) {
+      if (activeAlarms[timerId]) return; // already ringing
+      const ctx = getAlarmAudioCtx();
+      if (!ctx) return; // Web Audio unsupported — timer still shows as done visually
+      if (ctx.state === 'suspended') ctx.resume();
+
+      let stopped = false;
+      const beepOnce = (when) => {
+        if (stopped) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, when);
+        gain.gain.setValueAtTime(0, when);
+        gain.gain.linearRampToValueAtTime(0.35, when + 0.02);
+        gain.gain.linearRampToValueAtTime(0, when + 0.28);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(when);
+        osc.stop(when + 0.3);
+      };
+      let beatIndex = 0;
+      const scheduleNext = () => {
+        if (stopped) return;
+        const now = ctx.currentTime;
+        beepOnce(now);
+        beepOnce(now + 0.35);
+        beatIndex++;
+        // repeat the double-beep every 1.2s until dismissed or deleted
+        activeAlarms[timerId].timeoutId = setTimeout(scheduleNext, 1200);
+      };
+      activeAlarms[timerId] = { timeoutId: null, stop() { stopped = true; clearTimeout(activeAlarms[timerId].timeoutId); } };
+      scheduleNext();
+    }
+    function stopTimerAlarm(timerId) {
+      if (activeAlarms[timerId]) { activeAlarms[timerId].stop(); delete activeAlarms[timerId]; }
+    }
     let swElapsed=0, swRunning=false, swStart=0, laps=[];
     function swCurrent(){return swElapsed+(swRunning?(performance.now()-swStart):0)} function renderStopwatch(){const n=swCurrent();document.querySelector('#stopwatch-time').textContent=String(Math.floor(n/60000)).padStart(2,'0')+':'+String(Math.floor(n/1000)%60).padStart(2,'0')+'.'+Math.floor(n/100)%10;document.querySelector('#stopwatch-start').textContent=swRunning?'PAUSE':'START';}
     function toggleStopwatch(){if(swRunning){swElapsed=swCurrent();swRunning=false}else{swStart=performance.now();swRunning=true}renderStopwatch()} function resetStopwatch(){swElapsed=0;swRunning=false;laps=[];document.querySelector('#lap-list').innerHTML='';renderStopwatch()} function lapStopwatch(){if(!swRunning)return; const value=document.querySelector('#stopwatch-time').textContent;laps.unshift(value);document.querySelector('#lap-list').innerHTML=laps.map((x,i)=>`<div class="lap"><span>LAP ${laps.length-i}</span><b>${x}</b></div>`).join('');} setInterval(()=>{if(swRunning)renderStopwatch()},80);
@@ -276,7 +356,7 @@
     function calcSolution(){const m=num('sol-m')*unitFactor[unit('sol-mu')],mw=num('sol-mw'),v=num('sol-v')*unitFactor[unit('sol-vu')];if(!m||!mw||!v)return;const mass=m*mw*v;show('sol-result',`Weigh <b>${(mass*1000).toFixed(3)} mg</b> (${mass.toPrecision(5)} g), then bring to final volume.`)}
     let componentIndex = 0;
 
-function addComponent(type = 'stock', data = { name: 'Component ' + (componentIndex + 1), desired: '10', param1: '100', param2: '58.44' }) {
+function addComponent(type = 'stock', data = { name: '', desired: '', param1: '' }) {
   componentIndex++;
   const row = document.createElement('div');
   row.className = 'component';
@@ -354,13 +434,75 @@ function updateBuffer() {
     }
     function calcMolesVolume(){const n=num('mv-n')*unitFactor[unit('mv-nu')],v=num('mv-v')*unitFactor[unit('mv-vu')];if(!n||!v)return;const m=n/v;show('mv-result',`Molarity: <b>${m.toPrecision(6)} M</b> (${(m*1e3).toPrecision(5)} mM).`)}
     function calcMassMW(){const mass=num('mm-mass')*unitFactor[unit('mm-massu')],mw=num('mm-mw'),v=num('mm-vol')*unitFactor[unit('mm-volu')];if(!mass||!mw||!v)return;const m=mass/(mw*v);show('mm-result',`Molarity: <b>${m.toPrecision(6)} M</b> (${(m*1e3).toPrecision(5)} mM).`)}
-    const cells={viable:0,dead:0}; const cellSquares={wbc:{selected:[0,2,6,8],counts:[0,0,0,0]},rbc:{selected:[0,4,12,20,24],counts:[0,0,0,0,0]}}; let activeCellMode='wbc';
-    function adjustCells(kind,n){cells[kind]=Math.max(0,cells[kind]+n);document.querySelector('#'+kind+'-count').textContent=cells[kind]}
-    function renderCellGrid(mode){const config=cellSquares[mode],size=mode==='wbc'?9:25,target=document.querySelector('#cell-'+mode);target.innerHTML='';const grid=document.createElement('div');grid.className='count-grid '+mode+'-grid';for(let i=0;i<size;i++){const b=document.createElement('button'),picked=config.selected.indexOf(i),label=mode==='wbc'?'C'+(picked+1):'S'+(picked+1);b.textContent=picked>-1?label:'';if(picked>-1){b.className='selected';b.dataset.count=config.counts[picked];b.onclick=()=>{config.counts[picked]++;b.dataset.count=config.counts[picked];syncCellTotals()}}grid.append(b)}target.append(grid)}
-    function syncCellTotals(){cells.viable=cellSquares[activeCellMode].counts.reduce((a,b)=>a+b,0);document.querySelector('#viable-count').textContent=cells.viable}
-    function setCellMode(mode){activeCellMode=mode;syncCellTotals();document.querySelector('#cell-formula').innerHTML=mode==='wbc'?'Tap each selected large corner square to tally cells. Formula: <code>average count × dilution × 10⁴</code> cells/mL.':'Tap each of the five selected central RBC squares to tally cells. Formula: <code>total count × dilution × 5 × 10⁴</code> cells/mL.'} renderCellGrid('wbc');renderCellGrid('rbc');
+    // Cell counter: each mode (wbc/rbc) tracks its own selected squares, with a
+    // separate count array per viability state (viable / nonviable). The active
+    // viability sub-tab decides which array a square tap/minus affects, and the
+    // grid badge on each square always reflects the currently active sub-tab's
+    // count for that square — switching sub-tabs re-renders the badges.
+    const cellData = {
+      wbc: { selected: [0,2,6,8], viable: [0,0,0,0], nonviable: [0,0,0,0] },
+      rbc: { selected: [0,4,12,20,24], viable: [0,0,0,0,0], nonviable: [0,0,0,0,0] }
+    };
+    let activeCellMode = 'wbc';
+    let activeViability = 'viable';
+
+    function renderCellGrid(mode) {
+      const config = cellData[mode], size = mode==='wbc'?9:25, target = document.querySelector('#cell-'+mode);
+      target.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'count-grid ' + mode + '-grid';
+      for (let i=0; i<size; i++) {
+        const b = document.createElement('button'), picked = config.selected.indexOf(i), label = mode==='wbc' ? 'C'+(picked+1) : 'S'+(picked+1);
+        b.textContent = picked>-1 ? label : '';
+        if (picked>-1) {
+          b.className = 'selected';
+          b.dataset.count = config[activeViability][picked];
+          b.onclick = () => { config[activeViability][picked]++; b.dataset.count = config[activeViability][picked]; syncCellTotals(); };
+          const minus = document.createElement('button');
+          minus.className = 'square-minus';
+          minus.textContent = '−';
+          minus.title = 'Remove one';
+          minus.onclick = (ev) => { ev.stopPropagation(); config[activeViability][picked] = Math.max(0, config[activeViability][picked]-1); b.dataset.count = config[activeViability][picked]; syncCellTotals(); };
+          b.appendChild(minus);
+        }
+        grid.append(b);
+      }
+      target.append(grid);
+    }
+    function syncCellTotals() {
+      const config = cellData[activeCellMode];
+      document.querySelector('#viable-count').textContent = config.viable.reduce((a,b)=>a+b,0);
+      document.querySelector('#dead-count').textContent = config.nonviable.reduce((a,b)=>a+b,0);
+    }
+    function setCellMode(mode) {
+      activeCellMode = mode;
+      syncCellTotals();
+      document.querySelector('#cell-formula').innerHTML = mode==='wbc' ? 'Tap each selected large corner square to tally cells. Formula: <code>average count × dilution × 10⁴</code> cells/mL.' : 'Tap each of the five selected central RBC squares to tally cells. Formula: <code>total count × dilution × 5 × 10⁴</code> cells/mL.';
+      renderCellGrid('wbc'); renderCellGrid('rbc');
+    }
+    function setCellViability(viability) {
+      activeViability = viability;
+      renderCellGrid('wbc'); renderCellGrid('rbc');
+    }
     document.querySelectorAll('[data-group="celltype"] .tool-tab').forEach(tab=>tab.addEventListener('click',()=>setCellMode(tab.dataset.toolView==='cell-wbc'?'wbc':'rbc')));
-    function calcCells(){const counts=cellSquares[activeCellMode].counts, squares=counts.length, factor=num('cell-dilution')||1,sum=counts.reduce((a,b)=>a+b,0),avg=sum/squares,total=cells.viable+cells.dead,conc=activeCellMode==='wbc'?avg*factor*1e4:sum*factor*5e4,viability=total?cells.viable/total*100:0;show('cell-result',`${activeCellMode==='wbc'?'WBC / large-square':'RBC / central-square'} average: <b>${avg.toFixed(1)}</b> cells / selected square<br>Estimated concentration: <b>${conc.toExponential(2)}</b> cells/mL<br>Viability: <b>${viability.toFixed(1)}%</b> (${cells.viable} viable / ${cells.dead} non-viable)`) }
+    document.querySelectorAll('[data-group="viability"] .tool-tab').forEach(tab=>tab.addEventListener('click',(e)=>{
+      document.querySelectorAll('[data-group="viability"] .tool-tab').forEach(x=>x.classList.remove('active'));
+      e.currentTarget.classList.add('active');
+      setCellViability(tab.dataset.toolView==='viable'?'viable':'nonviable');
+    }));
+    setCellMode('wbc'); // render both grids and totals on first load, instead of leaving them blank until a tab is clicked
+    function calcCells() {
+      const config = cellData[activeCellMode];
+      const squares = config.selected.length;
+      const factor = num('cell-dilution') || 1;
+      const viableSum = config.viable.reduce((a,b)=>a+b,0);
+      const nonviableSum = config.nonviable.reduce((a,b)=>a+b,0);
+      const totalSum = viableSum + nonviableSum;
+      const avg = totalSum / squares;
+      const conc = activeCellMode==='wbc' ? avg*factor*1e4 : totalSum*factor*5e4;
+      const viability = totalSum ? viableSum/totalSum*100 : 0;
+      show('cell-result', `${activeCellMode==='wbc'?'WBC / large-square':'RBC / central-square'} average: <b>${avg.toFixed(1)}</b> cells / selected square<br>Estimated concentration: <b>${conc.toExponential(2)}</b> cells/mL<br>Viability: <b>${viability.toFixed(1)}%</b> (${viableSum} viable / ${nonviableSum} non-viable)`);
+    }
     function renderCultureTrack(){
       const current = +document.querySelector('#culture-current').value;
       const target = +document.querySelector('#culture-target').value;
@@ -448,7 +590,7 @@ function updateBuffer() {
         const isXMode = sample.mode === 'x';
         sampleEl.innerHTML = `
           <div class="calib-sample-head">
-            <input type="text" value="${sample.name}" oninput="calibSamples[${i}].name = this.value">
+            <input type="text" value="${sample.name}" placeholder="Sample name" oninput="calibSamples[${i}].name = this.value">
             <button class="calib-del" onclick="removeCalibSample(${i})" style="width:34px;height:34px;font-size:13px">×</button>
           </div>
           <div class="calib-sample-vals">
@@ -462,7 +604,7 @@ function updateBuffer() {
     }
 
     function addCalibSample() {
-      calibSamples.push({ name: 'Sample ' + String.fromCharCode(65 + calibSamples.length), x: '', y: '', mode: 'x' });
+      calibSamples.push({ name: '', x: '', y: '', mode: 'x' });
       renderCalibrationSamplesUI();
       renderCalibrationGraph();
     }
@@ -663,18 +805,18 @@ function updateBuffer() {
     function createElement(s,row,col){if(!s)return;const n=symbols.indexOf(s)+1,cat=group(s,n),b=document.createElement('button');b.className='element';b.style.setProperty('--element-color',colors[cat]);b.style.gridColumn=col;b.style.gridRow=row;b.innerHTML=`<small>${n}</small><b>${s}</b>`;b.onclick=()=>showElement({s,n,cat});document.querySelector('#periodic-table').append(b)}periodRows.forEach((row,r)=>row.forEach((s,c)=>createElement(s,r+1,c+1)));symbols.slice(56,71).forEach((s,i)=>createElement(s,8,i+4));symbols.slice(88,103).forEach((s,i)=>createElement(s,9,i+4));
     let periodicReference;async function showElement(e){const modal=document.querySelector('#element-modal');modal.classList.add('open');document.querySelector('#element-title').textContent=`${e.s} · atomic no. ${e.n}`;const info=document.querySelector('#element-info');info.innerHTML=`<dt>Category</dt><dd>${named[e.cat]}</dd><dt>Atomic mass</dt><dd>Loading reference data…</dd><dt>Electron config.</dt><dd>Loading reference data…</dd><dt>Melting point</dt><dd>Loading reference data…</dd><dt>Boiling point</dt><dd>Loading reference data…</dd>`;try{if(!periodicReference){const res=await fetch('https://raw.githubusercontent.com/Bowserinator/Periodic-Table-JSON/master/PeriodicTableJSON.json');periodicReference=(await res.json()).elements}const d=periodicReference.find(x=>x.number===e.n);info.innerHTML=`<dt>Category</dt><dd>${named[e.cat]}</dd><dt>Atomic mass</dt><dd>${d.atomic_mass ?? '—'}</dd><dt>Electron config.</dt><dd>${d.electron_configuration ?? '—'}</dd><dt>Melting point</dt><dd>${d.melt ?? '—'} K</dd><dt>Boiling point</dt><dd>${d.boil ?? '—'} K</dd>`}catch{info.innerHTML=`<dt>Category</dt><dd>${named[e.cat]}</dd><dt>Atomic mass</dt><dd>Reference lookup unavailable</dd><dt>Electron config.</dt><dd>Reference lookup unavailable</dd><dt>Melting point</dt><dd>Reference lookup unavailable</dd><dt>Boiling point</dt><dd>Reference lookup unavailable</dd>`}}
     function resetCells() {
-    // 1. Reset the global totals
-    cells.viable = 0;
-    cells.dead = 0;
-    // 2. Zero out the grid arrays
-    cellSquares.wbc.counts = [0, 0, 0, 0];
-    cellSquares.rbc.counts = [0, 0, 0, 0, 0];
-    // 3. Update the UI text
+    // 1. Zero out every count array for both modes and both viability states
+    cellData.wbc.viable = [0, 0, 0, 0];
+    cellData.wbc.nonviable = [0, 0, 0, 0];
+    cellData.rbc.viable = [0, 0, 0, 0, 0];
+    cellData.rbc.nonviable = [0, 0, 0, 0, 0];
+    // 2. Update the UI text
     document.querySelector('#viable-count').textContent = '0';
     document.querySelector('#dead-count').textContent = '0';
     document.querySelector('#cell-result').innerHTML = 'Select a count mode and tap the chosen squares.';
-    // 4. Visually clear the active grid
-    renderCellGrid(activeCellMode);
+    // 3. Visually clear both grids (badges reset regardless of which is on screen)
+    renderCellGrid('wbc');
+    renderCellGrid('rbc');
     }
 
     // 1. Live Date Initialization
