@@ -208,14 +208,23 @@
           <div class="tool-tabs" data-group="calibration">
             <button class="tool-tab active" data-tool-view="calib-linear">LINEAR</button>
             <button class="tool-tab" data-tool-view="calib-exponential">EXPONENTIAL</button>
+            <button class="tool-tab" data-tool-view="calib-logarithmic">LOGARITHMIC</button>
             <button class="tool-tab" data-tool-view="calib-curve">CURVE</button>
           </div>
 
+          <label class="calib-origin-toggle-label">
+            <input type="checkbox" id="calib-origin-toggle" onchange="renderCalibrationGraph()">
+            Force origin at (0, 0)
+          </label>
+
           <div id="calib-linear" class="tool-view active">
-            <p class="formula">Fit: <code>y = m·x + c</code>. Add at least two data points to preview the graph.</p>
+            <p class="formula">Fit: <code>y = m·x + c</code> (or <code>y = m·x</code> with the origin toggle on). Add at least two data points to preview the graph.</p>
           </div>
           <div id="calib-exponential" class="tool-view">
             <p class="formula">Fit: <code>y = a·e<sup>b·x</sup></code>. Add at least two positive-y data points to preview the graph.</p>
+          </div>
+          <div id="calib-logarithmic" class="tool-view">
+            <p class="formula">Fit: <code>y = a + b·ln(x)</code>. Add at least two data points with positive x values to preview the graph.</p>
           </div>
           <div id="calib-curve" class="tool-view">
             <p class="formula">Fit: <code>Smooth free-form spline/curve</code> connecting random points via SVG Bézier interpolation.</p>
@@ -252,6 +261,7 @@
       <section class="card library-block"><button class="library-head" onclick="toggleLibrary(this)">01 — AMINO ACID DETAILS <span>+</span></button><div class="library-body"><p class="formula">Expand a chemical category to view each amino acid, its one- and three-letter codes, and a compact side-chain notation.</p><div id="amino-acids"></div></div></section>
       <section class="card library-block"><button class="library-head" onclick="toggleLibrary(this)">02 — CODON CHART <span>+</span></button><div class="library-body"><p class="formula">RNA codons. Stop codons are shown in red.</p><div id="codon-chart" class="codon-grid"></div></div></section>
       <section class="card library-block"><button class="library-head" onclick="toggleLibrary(this)">03 — PERIODIC TABLE <span>+</span></button><div class="library-body"><div id="periodic-legend" class="legend"></div><div class="periodic-wrap"><div id="periodic-table" class="periodic"></div></div></div></section>
+      <section class="card library-block"><button class="library-head" onclick="toggleLibrary(this)">04 — MEDIA / BUFFERS <span>+</span></button><div class="library-body"><p class="formula">Composition reference for ~35 of the most common cell culture media and lab buffers. Expand a category to browse.</p><div id="media-buffers"></div></div></section>
     </section>
   </main>
 

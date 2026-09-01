@@ -608,9 +608,13 @@ function updateBuffer() {
     }
 
     function updateCalibPoint(i, field, val) {
-      calibPoints[i][field] = val === '' ? '' : parseFloat(val);
+      // Keep the raw string the user is typing (so "0." or "-" or a trailing
+      // decimal point isn't stripped mid-keystroke); only the calculation
+      // layer parses this to a number. Re-rendering the whole row on every
+      // keystroke would reset the cursor and swallow characters like ".".
+      calibPoints[i][field] = val;
       renderCalibrationGraph();
-      renderCalibrationSamplesUI();
+      updateCalibSampleValuesOnly();
     }
 
     function removeCalibPoint(i) {
@@ -632,12 +636,36 @@ function updateBuffer() {
             <button class="calib-del" onclick="removeCalibSample(${i})" style="width:34px;height:34px;font-size:13px">×</button>
           </div>
           <div class="calib-sample-vals">
-            <input type="number" placeholder="${isXMode ? 'Enter X' : 'Calculated X'}" value="${isXMode ? sample.x : (sample.x !== '' ? sample.x.toFixed(2) : '')}" ${isXMode ? '' : 'readonly'} oninput="calibSamples[${i}].x = this.value === '' ? '' : parseFloat(this.value); renderCalibrationGraph();">
+            <input type="number" placeholder="${isXMode ? 'Enter X' : 'Calculated X'}" value="${isXMode ? sample.x : (sample.x !== '' && !isNaN(sample.x) ? (+sample.x).toFixed(2) : '')}" ${isXMode ? '' : 'readonly'} oninput="updateCalibSample(${i}, 'x', this.value)">
             <button class="calib-swap" onclick="toggleSampleMode(${i})" title="Toggle input mode">⇄</button>
-            <input type="number" placeholder="${!isXMode ? 'Enter Y' : 'Calculated Y'}" value="${!isXMode ? sample.y : (sample.y !== '' ? sample.y.toFixed(2) : '')}" ${!isXMode ? '' : 'readonly'} oninput="calibSamples[${i}].y = this.value === '' ? '' : parseFloat(this.value); renderCalibrationGraph();">
+            <input type="number" placeholder="${!isXMode ? 'Enter Y' : 'Calculated Y'}" value="${!isXMode ? sample.y : (sample.y !== '' && !isNaN(sample.y) ? (+sample.y).toFixed(2) : '')}" ${!isXMode ? '' : 'readonly'} oninput="updateCalibSample(${i}, 'y', this.value)">
           </div>
         `;
         container.appendChild(sampleEl);
+      });
+    }
+
+    function updateCalibSample(i, field, val) {
+      // Same principle as updateCalibPoint: keep the raw typed string, only
+      // the graph/calculation layer parses it, so a trailing "." or "-"
+      // isn't wiped out on every keystroke.
+      calibSamples[i][field] = val;
+      renderCalibrationGraph();
+    }
+
+    // Recomputes each sample's derived value (the one calculated FROM the
+    // fitted curve) without rebuilding the sample input rows — rebuilding on
+    // every data-point keystroke would blow away whatever the user is
+    // currently typing into a sample field.
+    function updateCalibSampleValuesOnly() {
+      calibSamples.forEach((sample, i) => {
+        const row = document.querySelectorAll('#calib-samples .calib-sample')[i];
+        if (!row) return;
+        const isXMode = sample.mode === 'x';
+        const readonlyInput = row.querySelector(isXMode ? '.calib-sample-vals input:last-child' : '.calib-sample-vals input:first-child');
+        if (!readonlyInput) return;
+        const val = isXMode ? sample.y : sample.x;
+        readonlyInput.value = (val !== '' && !isNaN(val)) ? (+val).toFixed(2) : '';
       });
     }
 
@@ -664,7 +692,9 @@ function updateBuffer() {
       const empty = document.getElementById('calib-empty');
       if (!svg || !empty) return;
 
-      const validPts = calibPoints.filter(p => !isNaN(p.x) && !isNaN(p.y) && p.x !== '' && p.y !== '');
+      const validPts = calibPoints
+        .map(p => ({ x: parseFloat(p.x), y: parseFloat(p.y) }))
+        .filter(p => !isNaN(p.x) && !isNaN(p.y));
       if (validPts.length < 2) {
         svg.style.display = 'none';
         empty.style.display = 'grid';
@@ -678,7 +708,13 @@ function updateBuffer() {
 
       let minX = validPts[0].x, maxX = validPts[validPts.length - 1].x;
       let minY = Math.min(...validPts.map(p => p.y)), maxY = Math.max(...validPts.map(p => p.y));
-      
+
+      const lockOrigin = document.getElementById('calib-origin-toggle')?.checked || false;
+      if (lockOrigin) {
+        minX = Math.min(minX, 0);
+        minY = Math.min(minY, 0);
+      }
+
       if (minX === maxX) maxX += 1;
       if (minY === maxY) maxY += 1;
 
@@ -686,6 +722,15 @@ function updateBuffer() {
       const paddingY = (maxY - minY) * 0.15 || 1;
       minX -= paddingX; maxX += paddingX;
       minY -= paddingY; maxY += paddingY;
+      if (lockOrigin) {
+        // Extend the axis to include the origin without padding pushing it
+        // past zero (so 0 sits exactly at the plot's corner when all data is
+        // on one side, which is the common case).
+        minX = minX > 0 ? 0 : minX;
+        maxX = maxX < 0 ? 0 : maxX;
+        minY = minY > 0 ? 0 : minY;
+        maxY = maxY < 0 ? 0 : maxY;
+      }
 
       const width = 300, height = 190;
       const xLabel = (document.getElementById('calib-xlabel')?.value || '').trim();
@@ -722,22 +767,34 @@ function updateBuffer() {
       svgContent += `<text x="${yLabel ? 17 : 5}" y="${padTop + 8}" font-size="9" fill="#697087">${maxY.toFixed(1)}</text>`;
 
       if (tabViewId === 'calib-linear') {
-        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, n = validPts.length;
-        validPts.forEach(p => {
-          sumX += p.x; sumY += p.y; sumXY += (p.x * p.y); sumX2 += (p.x * p.x);
-        });
-        const m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX || 0.0001);
-        const c = (sumY - m * sumX) / n;
+        const lockOriginLinear = lockOrigin;
+        let m, c;
+        if (lockOriginLinear) {
+          // Force the line through (0,0): y = m·x, fit by least squares with
+          // no intercept term.
+          let sumXY = 0, sumX2 = 0;
+          validPts.forEach(p => { sumXY += p.x * p.y; sumX2 += p.x * p.x; });
+          m = sumXY / (sumX2 || 0.0001);
+          c = 0;
+        } else {
+          let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, n = validPts.length;
+          validPts.forEach(p => {
+            sumX += p.x; sumY += p.y; sumXY += (p.x * p.y); sumX2 += (p.x * p.x);
+          });
+          m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX || 0.0001);
+          c = (sumY - m * sumX) / n;
+        }
 
         const x1 = minX, y1 = m * x1 + c;
         const x2 = maxX, y2 = m * x2 + c;
         svgContent += `<line x1="${scaleX(x1)}" y1="${scaleY(y1)}" x2="${scaleX(x2)}" y2="${scaleY(y2)}" stroke="#7655e7" stroke-width="2.5"/>`;
 
         calibSamples.forEach(sample => {
-          if (sample.mode === 'x' && sample.x !== '') {
-            sample.y = m * sample.x + c;
-          } else if (sample.mode === 'y' && sample.y !== '') {
-            sample.x = (sample.y - c) / (m || 0.0001);
+          const sx = parseFloat(sample.x), sy = parseFloat(sample.y);
+          if (sample.mode === 'x' && sample.x !== '' && !isNaN(sx)) {
+            sample.y = m * sx + c;
+          } else if (sample.mode === 'y' && sample.y !== '' && !isNaN(sy)) {
+            sample.x = (sy - c) / (m || 0.0001);
           }
         });
       } else if (tabViewId === 'calib-exponential') {
@@ -762,10 +819,43 @@ function updateBuffer() {
           svgContent += `<path d="${pathD}" fill="none" stroke="#ff9f43" stroke-width="2.5"/>`;
 
           calibSamples.forEach(sample => {
-            if (sample.mode === 'x' && sample.x !== '') {
-              sample.y = a * Math.exp(b * sample.x);
-            } else if (sample.mode === 'y' && sample.y > 0) {
-              sample.x = Math.log(sample.y / a) / (b || 0.0001);
+            const sx = parseFloat(sample.x), sy = parseFloat(sample.y);
+            if (sample.mode === 'x' && sample.x !== '' && !isNaN(sx)) {
+              sample.y = a * Math.exp(b * sx);
+            } else if (sample.mode === 'y' && sample.y !== '' && !isNaN(sy) && sy > 0) {
+              sample.x = Math.log(sy / a) / (b || 0.0001);
+            }
+          });
+        }
+      } else if (tabViewId === 'calib-logarithmic') {
+        // y = a + b*ln(x) — only defined for x > 0.
+        let validLog = validPts.filter(p => p.x > 0);
+        if (validLog.length >= 2) {
+          let sumLnX = 0, sumY = 0, sumLnXY = 0, sumLnX2 = 0, n = validLog.length;
+          validLog.forEach(p => {
+            const lx = Math.log(p.x);
+            sumLnX += lx; sumY += p.y; sumLnXY += lx * p.y; sumLnX2 += lx * lx;
+          });
+          const b = (n * sumLnXY - sumLnX * sumY) / (n * sumLnX2 - sumLnX * sumLnX || 0.0001);
+          const a = (sumY - b * sumLnX) / n;
+
+          const plotMinX = Math.max(minX, 1e-6);
+          let pathD = '';
+          const steps = 50;
+          for (let i = 0; i <= steps; i++) {
+            const x = plotMinX + (i / steps) * (maxX - plotMinX);
+            const y = a + b * Math.log(x);
+            const sx = scaleX(x), sy = scaleY(y);
+            pathD += (i === 0 ? `M ${sx} ${sy}` : ` L ${sx} ${sy}`);
+          }
+          svgContent += `<path d="${pathD}" fill="none" stroke="#62c8ff" stroke-width="2.5"/>`;
+
+          calibSamples.forEach(sample => {
+            const sx = parseFloat(sample.x), sy = parseFloat(sample.y);
+            if (sample.mode === 'x' && sample.x !== '' && !isNaN(sx) && sx > 0) {
+              sample.y = a + b * Math.log(sx);
+            } else if (sample.mode === 'y' && sample.y !== '' && !isNaN(sy)) {
+              sample.x = Math.exp((sy - a) / (b || 0.0001));
             }
           });
         }
@@ -787,8 +877,9 @@ function updateBuffer() {
         svgContent += `<path d="${pathD}" fill="none" stroke="#ff76b7" stroke-width="2.5"/>`;
 
         calibSamples.forEach(sample => {
-          if (sample.mode === 'x' && sample.x !== '') {
-            let targetX = sample.x;
+          const sx = parseFloat(sample.x), sy = parseFloat(sample.y);
+          if (sample.mode === 'x' && sample.x !== '' && !isNaN(sx)) {
+            let targetX = sx;
             if (targetX <= validPts[0].x) { sample.y = validPts[0].y; return; }
             if (targetX >= validPts[validPts.length - 1].x) { sample.y = validPts[validPts.length - 1].y; return; }
             for (let i = 0; i < validPts.length - 1; i++) {
@@ -798,8 +889,8 @@ function updateBuffer() {
                 break;
               }
             }
-          } else if (sample.mode === 'y' && sample.y !== '') {
-            let targetY = sample.y;
+          } else if (sample.mode === 'y' && sample.y !== '' && !isNaN(sy)) {
+            let targetY = sy;
             for (let i = 0; i < validPts.length - 1; i++) {
               if ((targetY >= validPts[i].y && targetY <= validPts[i+1].y) || (targetY <= validPts[i].y && targetY >= validPts[i+1].y)) {
                 const ratio = (targetY - validPts[i].y) / (validPts[i+1].y - validPts[i].y || 1);
@@ -825,7 +916,7 @@ function updateBuffer() {
       });
 
       svg.innerHTML = svgContent;
-      renderCalibrationSamplesUI();
+      updateCalibSampleValuesOnly();
     }
 
 
@@ -834,6 +925,25 @@ function updateBuffer() {
     function toggleLibrary(button){button.parentElement.classList.toggle('open')}
     const aminoGroups=[['Basic / positively charged','#c5b3ff',[['Histidine','H','His','155.16'],['Lysine','K','Lys','146.19'],['Arginine','R','Arg','174.20']]],['Acidic / negatively charged','#ff9eaa',[['Aspartic acid','D','Asp','133.10'],['Glutamic acid','E','Glu','147.13']]],['Polar uncharged','#d7f5a0',[['Serine','S','Ser','105.09'],['Threonine','T','Thr','119.12'],['Asparagine','N','Asn','132.12'],['Glutamine','Q','Gln','146.15'],['Cysteine','C','Cys','121.15'],['Tyrosine','Y','Tyr','181.19']]],['Hydrophobic / nonpolar','#ffc97c',[['Glycine','G','Gly','75.07'],['Alanine','A','Ala','89.09'],['Valine','V','Val','117.15'],['Leucine','L','Leu','131.18'],['Isoleucine','I','Ile','131.18'],['Methionine','M','Met','149.21'],['Phenylalanine','F','Phe','165.19'],['Tryptophan','W','Trp','204.23'],['Proline','P','Pro','115.13']]]];
     const aaRoot=document.querySelector('#amino-acids');aminoGroups.forEach(([title,color,items])=>{const section=document.createElement('div');section.className='aa-category';section.style.setProperty('--aa-color',color);section.innerHTML=`<button>${title}<span>${items.length} amino acids +</span></button><div class="aa-list"></div>`;section.querySelector('button').onclick=()=>section.classList.toggle('open');items.forEach(([name,one,three,mass])=>{const card=document.createElement('article');card.className='aa-card';card.innerHTML=`<b>${name}</b><div class="aa-codes"><span>${one}</span><span>${three}</span></div><div class="aa-mass">Molar mass: <b>${mass} g/mol</b></div>`;section.querySelector('.aa-list').append(card)});aaRoot.append(section)});
+
+    // ---- Media / Buffers library subsections ----
+    // Same collapsible-category visual pattern as the amino acid list above,
+    // generalized under `.subsection`/`.subsection-list` so it isn't tied to
+    // amino-acid-specific naming. Composition entries are added later —
+    // for now each category just opens to an empty list.
+    const mediaBufferGroups = [
+      ['Media', '#c9f3b4', []],
+      ['Buffers', '#bae3ff', []]
+    ];
+    const mediaBufferRoot = document.querySelector('#media-buffers');
+    mediaBufferGroups.forEach(([title, color, items]) => {
+      const section = document.createElement('div');
+      section.className = 'subsection';
+      section.style.setProperty('--subsection-color', color);
+      section.innerHTML = `<button>${title}<span>${items.length} recipes +</span></button><div class="subsection-list"></div>`;
+      section.querySelector('button').onclick = () => section.classList.toggle('open');
+      mediaBufferRoot.append(section);
+    });
     const codons={Phe:'UUU UUC',Leu:'UUA UUG CUU CUC CUA CUG',Ile:'AUU AUC AUA',Met:'AUG',Val:'GUU GUC GUA GUG',Ser:'UCU UCC UCA UCG AGU AGC',Pro:'CCU CCC CCA CCG',Thr:'ACU ACC ACA ACG',Ala:'GCU GCC GCA GCG',Tyr:'UAU UAC',Stop:'UAA UAG UGA',His:'CAU CAC',Gln:'CAA CAG',Asn:'AAU AAC',Lys:'AAA AAG',Asp:'GAU GAC',Glu:'GAA GAG',Cys:'UGU UGC',Trp:'UGG',Arg:'CGU CGC CGA CGG AGA AGG',Gly:'GGU GGC GGA GGG'};Object.entries(codons).forEach(([aa,list])=>list.split(' ').forEach(c=>{const x=document.createElement('div');x.className='codon '+(aa==='Stop'?'stop':'');x.innerHTML=`<b>${c}</b>${aa}`;document.querySelector('#codon-chart').append(x)}));
     const symbols=['H','He','Li','Be','B','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','I','Xe','Cs','Ba','La','Ce','Pr','Nd','Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn','Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt','Ds','Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og'];
     const periodRows=[['H','','','','','','','','','','','','','','','','','He'],['Li','Be','','','','','','','','','','','B','C','N','O','F','Ne'],['Na','Mg','','','','','','','','','','','Al','Si','P','S','Cl','Ar'],['K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr'],['Rb','Sr','Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','I','Xe'],['Cs','Ba','','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn'],['Fr','Ra','','Rf','Db','Sg','Bh','Hs','Mt','Ds','Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og']];
