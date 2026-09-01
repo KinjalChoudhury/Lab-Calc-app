@@ -136,7 +136,14 @@
       const proto = protocols.find(p => p.id === openProtocolId);
       if (!proto) return;
       if (typeof proto.notes !== 'string') proto.notes = '';
-      document.querySelector('#editor-protocol-name').textContent = proto.name;
+      const nameInput = document.querySelector('#editor-protocol-name');
+      if (document.activeElement !== nameInput) nameInput.value = proto.name;
+      nameInput.oninput = e => { proto.name = e.target.value; };
+      nameInput.onblur = () => {
+        if (!proto.name.trim()) proto.name = 'Untitled protocol';
+        renderProtocolEditor();
+        renderProtocolLists();
+      };
       const { total, done, pct } = protocolMeta(proto);
       document.querySelector('#editor-progress-label').textContent = `${done} / ${total}`;
       document.querySelector('#editor-progress-fill').style.width = pct + '%';

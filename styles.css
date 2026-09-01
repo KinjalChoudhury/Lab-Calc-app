@@ -275,8 +275,11 @@
     #tool-picker-modal { z-index: 7; }
     .proto-modal.open { display: grid; }
     .proto-sheet { width: min(480px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; padding: 20px; border: 2px solid var(--ink); border-radius: 10px; background: white; box-shadow: 6px 6px 0 var(--ink); }
-    .proto-sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .proto-sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 10px; }
     .proto-sheet-head h2 { margin: 0; font-size: 19px; letter-spacing: -.5px; }
+    .proto-name-heading { flex: 1; min-width: 0; border: 1.5px solid transparent; background: transparent; margin: 0; padding: 4px 6px; font: inherit; font-size: 19px; font-weight: bold; letter-spacing: -.5px; color: var(--ink); border-radius: 5px; }
+    .proto-name-heading:hover { border-color: var(--line); }
+    .proto-name-heading:focus { outline: none; border-color: var(--ink); background: #fff; }
     .proto-close { border: 1.5px solid var(--ink); border-radius: 6px; background: white; width: 30px; height: 30px; font-weight: bold; }
     .proto-name-input { width: 100%; padding: 12px; border: 2px solid var(--ink); border-radius: 7px; font: inherit; font-size: 15px; font-weight: bold; margin-bottom: 14px; }
     .proto-step-form { display: grid; gap: 9px; padding: 13px; border: 1.5px dashed var(--ink); border-radius: 8px; background: #fbfaf6; margin-bottom: 14px; }
