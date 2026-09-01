@@ -322,7 +322,33 @@
     let single=0; function changeSingle(n){single=Math.max(0,single+n);document.querySelector('#single-value').textContent=single;}
     const counters=[]; function createCounter(){const name=document.querySelector('#counter-name').value.trim()||'Untitled';counters.push({name,value:0});document.querySelector('#counter-name').value='';renderCounters()} function renderCounters(){const list=document.querySelector('#counter-list');list.innerHTML='';counters.forEach((counter,i)=>{const row=document.createElement('div');row.className='counter-row';row.innerHTML=`<b>${counter.name}</b><div class="counter-box">${counter.value}</div><button>+</button><button>−</button>`;row.querySelectorAll('button')[0].onclick=()=>{counter.value++;renderCounters()};row.querySelectorAll('button')[1].onclick=()=>{counter.value=Math.max(0,counter.value-1);renderCounters()};list.append(row)})}
     const blood={RBC:0,WBC:0,Platelets:0}; function renderBlood(){const grid=document.querySelector('#blood-grid');grid.innerHTML='';Object.entries(blood).forEach(([name,value])=>{const box=document.createElement('div');box.className='blood';box.innerHTML=`<b>${name}</b><div class="blood-value">${value}</div><div class="blood-controls"><button>+</button><button>−</button></div>`;box.querySelectorAll('button')[0].onclick=()=>{blood[name]++;renderBlood()};box.querySelectorAll('button')[1].onclick=()=>{blood[name]=Math.max(0,blood[name]-1);renderBlood()};grid.append(box)})} renderBlood();
-    let expression=''; const display=()=>{document.querySelector('#calc-expression').textContent=expression;document.querySelector('#calc-output').textContent=expression||'0'}; function calcAppend(x){expression+=x;display()} function calcClear(){expression='';display()} function calcBack(){expression=expression.slice(0,-1);display()}
+    let expression='';
+    let justEvaluated=false; // true right after "=" — the next key press starts a fresh expression instead of appending
+    function updateLivePreview(){
+      const previewEl = document.querySelector('#calc-expression');
+      if (!expression) { previewEl.textContent=''; return; }
+      // Don't preview a bare number with no operation yet (e.g. just "9") —
+      // only once there's an actual calculation to show ahead of "=".
+      if (!/[+\-*/^]|ln\(|log\(|exp\(|√|∛/.test(expression)) { previewEl.textContent=''; return; }
+      try {
+        const x = calcToEvalString(expression);
+        if (!/^[\d+\-*/().,\sA-Za-z]+$/.test(x)) { previewEl.textContent=''; return; }
+        const answer = Function('return ('+x+')')();
+        if (!Number.isFinite(answer)) { previewEl.textContent=''; return; }
+        // Only preview once the expression actually reads as a complete
+        // calculation — e.g. don't preview "9*" or "9+(3" mid-typing, only
+        // once there's a full valid statement like "9*4".
+        previewEl.textContent = '= ' + (+answer.toPrecision(12));
+      } catch { previewEl.textContent=''; }
+    }
+    const display=()=>{document.querySelector('#calc-output').textContent=expression||'0'; updateLivePreview();};
+    function calcAppend(x){
+      if (justEvaluated) { expression=''; justEvaluated=false; }
+      expression+=x;
+      display();
+    }
+    function calcClear(){expression='';justEvaluated=false;display()}
+    function calcBack(){if(justEvaluated){expression='';justEvaluated=false;}else{expression=expression.slice(0,-1);}display()}
     function calcToEvalString(expr){
       // Convert the user-facing expression (which uses e, ^, √, ∛, π, ln(, log(, exp())
       // into a JS-evaluable string. Function-name tokens are swapped for unique
@@ -350,7 +376,7 @@
         .replaceAll('\u0007', 'Math.E');
       return x;
     }
-    function calcEval(){if(!expression)return;try{let x=calcToEvalString(expression); if(!/^[\d+\-*/().,\sA-Za-z]+$/.test(x))throw Error();const answer=Function('return ('+x+')')();if(!Number.isFinite(answer))throw Error();const out=+answer.toPrecision(12);const item=document.createElement('div');item.className='history-item';item.innerHTML=`${expression}<b>= ${out}</b>`;const list=document.querySelector('#history-list');if(list.children[0]?.textContent.includes('No calculations'))list.innerHTML='';list.prepend(item);expression=String(out);display()}catch{document.querySelector('#calc-output').textContent='ERROR'}}
+    function calcEval(){if(!expression)return;try{let x=calcToEvalString(expression); if(!/^[\d+\-*/().,\sA-Za-z]+$/.test(x))throw Error();const answer=Function('return ('+x+')')();if(!Number.isFinite(answer))throw Error();const out=+answer.toPrecision(12);const item=document.createElement('div');item.className='history-item';item.innerHTML=`${expression}<b>= ${out}</b>`;const list=document.querySelector('#history-list');if(list.children[0]?.textContent.includes('No calculations'))list.innerHTML='';list.prepend(item);expression=String(out);justEvaluated=true;document.querySelector('#calc-expression').textContent='';document.querySelector('#calc-output').textContent=expression}catch{document.querySelector('#calc-output').textContent='ERROR';document.querySelector('#calc-expression').textContent='';justEvaluated=true;expression=''}}
     const calcKeys=[['(', '('],[')', ')'],['π','π'],['e','e'],['AC','clear'],['7','7'],['8','8'],['9','9'],['÷','/'],['←','back'],['4','4'],['5','5'],['6','6'],['×','*'],['+','+'],['1','1'],['2','2'],['3','3'],['^','^'],['−','-'],['0','0'],['.','.'],['1/x','inv'],['10ˣ','10^'],['=','eval']];
     const keys=document.querySelector('#calc-keys');calcKeys.forEach(([label,value])=>{const b=document.createElement('button');b.className='calc-key '+(['÷','×','−','+','^'].includes(label)?'op ':'')+(label==='='?'eq':'');b.textContent=label;b.onclick=()=>{if(value==='clear')calcClear();else if(value==='back')calcBack();else if(value==='eval')calcEval();else if(value==='inv')calcAppend('1/');else calcAppend(value)};keys.append(b)}); [['log/ln',['log(','ln(']],['x²/x³',['^2','^3']],['√/∛',['√(','∛(']]].forEach(([label,opts])=>{const wrap=document.createElement('div');wrap.className='key-wrap';const button=document.createElement('button');button.className='calc-key';button.textContent=label;const menu=document.createElement('div');menu.className='key-menu';opts.forEach(v=>{const x=document.createElement('button');x.textContent=v;x.onclick=()=>{calcAppend(v);menu.classList.remove('open')};menu.append(x)});button.onclick=()=>menu.classList.toggle('open');wrap.append(button,menu);keys.append(wrap)}); display();
     function clearCalcHistory(){document.querySelector('#history-list').innerHTML='<span style="font-size:11px;color:var(--muted)">No calculations yet.</span>'}
@@ -637,7 +663,6 @@ function updateBuffer() {
           </div>
           <div class="calib-sample-vals">
             <input type="number" placeholder="${isXMode ? 'Enter X' : 'Calculated X'}" value="${isXMode ? sample.x : (sample.x !== '' && !isNaN(sample.x) ? (+sample.x).toFixed(2) : '')}" ${isXMode ? '' : 'readonly'} oninput="updateCalibSample(${i}, 'x', this.value)">
-            <button class="calib-swap" onclick="toggleSampleMode(${i})" title="Toggle input mode">⇄</button>
             <input type="number" placeholder="${!isXMode ? 'Enter Y' : 'Calculated Y'}" value="${!isXMode ? sample.y : (sample.y !== '' && !isNaN(sample.y) ? (+sample.y).toFixed(2) : '')}" ${!isXMode ? '' : 'readonly'} oninput="updateCalibSample(${i}, 'y', this.value)">
           </div>
         `;
@@ -681,12 +706,6 @@ function updateBuffer() {
       renderCalibrationGraph();
     }
 
-    function toggleSampleMode(i) {
-      calibSamples[i].mode = calibSamples[i].mode === 'x' ? 'y' : 'x';
-      renderCalibrationSamplesUI();
-      renderCalibrationGraph();
-    }
-
     function renderCalibrationGraph() {
       const svg = document.getElementById('calib-svg');
       const empty = document.getElementById('calib-empty');
@@ -709,12 +728,6 @@ function updateBuffer() {
       let minX = validPts[0].x, maxX = validPts[validPts.length - 1].x;
       let minY = Math.min(...validPts.map(p => p.y)), maxY = Math.max(...validPts.map(p => p.y));
 
-      const lockOrigin = document.getElementById('calib-origin-toggle')?.checked || false;
-      if (lockOrigin) {
-        minX = Math.min(minX, 0);
-        minY = Math.min(minY, 0);
-      }
-
       if (minX === maxX) maxX += 1;
       if (minY === maxY) maxY += 1;
 
@@ -722,20 +735,11 @@ function updateBuffer() {
       const paddingY = (maxY - minY) * 0.15 || 1;
       minX -= paddingX; maxX += paddingX;
       minY -= paddingY; maxY += paddingY;
-      if (lockOrigin) {
-        // Extend the axis to include the origin without padding pushing it
-        // past zero (so 0 sits exactly at the plot's corner when all data is
-        // on one side, which is the common case).
-        minX = minX > 0 ? 0 : minX;
-        maxX = maxX < 0 ? 0 : maxX;
-        minY = minY > 0 ? 0 : minY;
-        maxY = maxY < 0 ? 0 : maxY;
-      }
 
-      const width = 300, height = 190;
+      const width = 300, height = 257;
       const xLabel = (document.getElementById('calib-xlabel')?.value || '').trim();
       const yLabel = (document.getElementById('calib-ylabel')?.value || '').trim();
-      const padLeft = 35 + (yLabel ? 12 : 0), padRight = 15, padTop = 15, padBottom = 25 + (xLabel ? 14 : 0);
+      const padLeft = 40 + (yLabel ? 12 : 0), padRight = 15, padTop = 15, padBottom = 28 + (xLabel ? 14 : 0);
       const plotW = width - padLeft - padRight;
       const plotH = height - padTop - padBottom;
 
@@ -761,29 +765,49 @@ function updateBuffer() {
         svgContent += `<text x="10" y="${padTop + plotH / 2}" font-size="9" font-weight="bold" text-anchor="middle" transform="rotate(-90, 10, ${padTop + plotH / 2})" fill="#182034">${yLabel}</text>`;
       }
 
-      svgContent += `<text x="${padLeft}" y="${height - padBottom + (xLabel ? 13 : 9)}" font-size="9" fill="#697087">${minX.toFixed(1)}</text>`;
-      svgContent += `<text x="${width - padRight - 20}" y="${height - padBottom + (xLabel ? 13 : 9)}" font-size="9" fill="#697087">${maxX.toFixed(1)}</text>`;
-      svgContent += `<text x="${yLabel ? 17 : 5}" y="${height - padBottom}" font-size="9" fill="#697087">${minY.toFixed(1)}</text>`;
-      svgContent += `<text x="${yLabel ? 17 : 5}" y="${padTop + 8}" font-size="9" fill="#697087">${maxY.toFixed(1)}</text>`;
+      // Data-driven axis scale: a handful of evenly spaced "nice" tick values
+      // across the actual plotted range, rather than only the two endpoints.
+      function niceTicks(min, max, targetCount) {
+        const span = max - min;
+        if (!isFinite(span) || span <= 0) return [min, max];
+        const rawStep = span / targetCount;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const residual = rawStep / magnitude;
+        let niceStep;
+        if (residual > 5) niceStep = 10 * magnitude;
+        else if (residual > 2) niceStep = 5 * magnitude;
+        else if (residual > 1) niceStep = 2 * magnitude;
+        else niceStep = magnitude;
+        const start = Math.ceil(min / niceStep) * niceStep;
+        const ticks = [];
+        for (let v = start; v <= max + niceStep * 1e-6; v += niceStep) ticks.push(+v.toFixed(10));
+        return ticks.length ? ticks : [min, max];
+      }
+      const decimalsFor = step => Math.max(0, -Math.floor(Math.log10(step || 1)));
+
+      const xTicks = niceTicks(minX, maxX, 4);
+      const yTicks = niceTicks(minY, maxY, 4);
+      const xDecimals = xTicks.length > 1 ? decimalsFor(xTicks[1] - xTicks[0]) : 1;
+      const yDecimals = yTicks.length > 1 ? decimalsFor(yTicks[1] - yTicks[0]) : 1;
+
+      xTicks.forEach(tx => {
+        const sx = scaleX(tx);
+        svgContent += `<line x1="${sx}" y1="${height - padBottom}" x2="${sx}" y2="${height - padBottom + 4}" stroke="#182034" stroke-width="1"/>`;
+        svgContent += `<text x="${sx}" y="${height - padBottom + (xLabel ? 17 : 13)}" font-size="8" text-anchor="middle" fill="#697087">${tx.toFixed(xDecimals)}</text>`;
+      });
+      yTicks.forEach(ty => {
+        const sy = scaleY(ty);
+        svgContent += `<line x1="${padLeft - 4}" y1="${sy}" x2="${padLeft}" y2="${sy}" stroke="#182034" stroke-width="1"/>`;
+        svgContent += `<text x="${padLeft - 6}" y="${sy + 3}" font-size="8" text-anchor="end" fill="#697087">${ty.toFixed(yDecimals)}</text>`;
+      });
 
       if (tabViewId === 'calib-linear') {
-        const lockOriginLinear = lockOrigin;
-        let m, c;
-        if (lockOriginLinear) {
-          // Force the line through (0,0): y = m·x, fit by least squares with
-          // no intercept term.
-          let sumXY = 0, sumX2 = 0;
-          validPts.forEach(p => { sumXY += p.x * p.y; sumX2 += p.x * p.x; });
-          m = sumXY / (sumX2 || 0.0001);
-          c = 0;
-        } else {
-          let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, n = validPts.length;
-          validPts.forEach(p => {
-            sumX += p.x; sumY += p.y; sumXY += (p.x * p.y); sumX2 += (p.x * p.x);
-          });
-          m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX || 0.0001);
-          c = (sumY - m * sumX) / n;
-        }
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, n = validPts.length;
+        validPts.forEach(p => {
+          sumX += p.x; sumY += p.y; sumXY += (p.x * p.y); sumX2 += (p.x * p.x);
+        });
+        const m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX || 0.0001);
+        const c = (sumY - m * sumX) / n;
 
         const x1 = minX, y1 = m * x1 + c;
         const x2 = maxX, y2 = m * x2 + c;

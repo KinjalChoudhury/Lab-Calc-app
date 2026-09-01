@@ -212,13 +212,8 @@
             <button class="tool-tab" data-tool-view="calib-curve">CURVE</button>
           </div>
 
-          <label class="calib-origin-toggle-label">
-            <input type="checkbox" id="calib-origin-toggle" onchange="renderCalibrationGraph()">
-            Force origin at (0, 0)
-          </label>
-
           <div id="calib-linear" class="tool-view active">
-            <p class="formula">Fit: <code>y = m·x + c</code> (or <code>y = m·x</code> with the origin toggle on). Add at least two data points to preview the graph.</p>
+            <p class="formula">Fit: <code>y = m·x + c</code>. Add at least two data points to preview the graph.</p>
           </div>
           <div id="calib-exponential" class="tool-view">
             <p class="formula">Fit: <code>y = a·e<sup>b·x</sup></code>. Add at least two positive-y data points to preview the graph.</p>
@@ -237,7 +232,7 @@
 
           <div class="calib-graph" id="calib-graph">
             <div class="calib-empty" id="calib-empty">Add valid points to preview the graph.</div>
-            <svg id="calib-svg" viewBox="0 0 300 190" style="display:none"></svg>
+            <svg id="calib-svg" viewBox="0 0 300 257" style="display:none"></svg>
           </div>
 
           <div class="card" style="padding:14px;margin-bottom:14px">
