@@ -50,6 +50,9 @@
       function protocolDocRef(uid) {
         return doc(db, 'users', uid, 'data', 'protocols');
       }
+      function homeDocRef(uid) {
+        return doc(db, 'users', uid, 'data', 'home');
+      }
 
       window.handleAuthClick = async function () {
         if (currentUser) return; // identity display only once signed in — use the dedicated Sign out button
@@ -96,14 +99,22 @@
 
         setStatus('Syncing…', 'syncing');
         try {
-          const snap = await getDoc(protocolDocRef(user.uid));
+          const [protoSnap, homeSnap] = await Promise.all([
+            getDoc(protocolDocRef(user.uid)),
+            getDoc(homeDocRef(user.uid))
+          ]);
           applyingRemoteUpdate = true;
-          if (snap.exists() && Array.isArray(snap.data().protocols)) {
-            window.replaceAllProtocols(snap.data().protocols);
+          if (protoSnap.exists() && Array.isArray(protoSnap.data().protocols)) {
+            window.replaceAllProtocols(protoSnap.data().protocols);
           } else {
             // First sign-in on this account: push whatever is currently on this
             // device up as the starting cloud copy, rather than wiping it.
             await setDoc(protocolDocRef(user.uid), { protocols: window.getCurrentProtocols ? window.getCurrentProtocols() : [] });
+          }
+          if (homeSnap.exists()) {
+            window.replaceHomeData(homeSnap.data());
+          } else {
+            await setDoc(homeDocRef(user.uid), window.getCurrentHomeData ? window.getCurrentHomeData() : { notes: '', tasks: [] });
           }
           applyingRemoteUpdate = false;
           setStatus('Synced', 'synced');
@@ -124,6 +135,25 @@
         saveTimer = setTimeout(async () => {
           try {
             await setDoc(protocolDocRef(currentUser.uid), { protocols });
+            setStatus('Synced', 'synced');
+          } catch (err) {
+            console.error('Cloud save failed', err);
+            setStatus('Sync error — changes kept locally', 'offline');
+          }
+        }, 800);
+      };
+
+      // Same pattern as above, but for the home screen's quick notes + tasks.
+      // Uses its own debounce timer so notes-typing and protocol edits don't
+      // reset each other's pending save.
+      let homeSaveTimer = null;
+      window.onHomeDataChanged = function (homeData) {
+        if (!currentUser || applyingRemoteUpdate) return;
+        setStatus('Saving…', 'syncing');
+        clearTimeout(homeSaveTimer);
+        homeSaveTimer = setTimeout(async () => {
+          try {
+            await setDoc(homeDocRef(currentUser.uid), homeData);
             setStatus('Synced', 'synced');
           } catch (err) {
             console.error('Cloud save failed', err);

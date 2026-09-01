@@ -384,45 +384,76 @@ function addComponent(type = 'stock', data = { name: '', desired: '', param1: ''
   updateBuffer();
 }
 
-function updateBuffer() {
+function formatVolumeMl(ml) {
+  // Lab convention: use L for large volumes (>=1000 mL), µL for very small
+  // volumes (<1 mL), and mL for everything in between.
+  if (ml >= 1000) return (ml / 1000).toFixed(3).replace(/\.?0+$/, '') + ' L';
+  if (ml < 1 && ml > 0) return (ml * 1000).toFixed(1) + ' µL';
+  return ml.toFixed(2) + ' mL';
+}
+
+function computeBufferBreakdown() {
   const v = num('buffer-volume') * unitFactor[unit('buffer-unit')]; // Volume in Liters
   let totalSoluteVolumeMl = 0;
   let totalMassGrams = 0;
-  
+  const components = [];
+
   document.querySelectorAll('.component').forEach(row => {
     const type = row.dataset.type;
+    const name = row.querySelector('.comp-name').value.trim() || 'Component';
     const desiredConc = +(row.querySelector('.comp-desired').value || 0) * unitFactor[row.querySelector('.comp-du').value];
-    
+
     if (type === 'stock') {
       const stockConc = +(row.querySelector('.comp-stock').value || 0) * unitFactor[row.querySelector('.comp-su').value];
+      let addMl = 0;
       if (stockConc > 0) {
         const reqVolLiters = (desiredConc * v) / stockConc;
-        totalSoluteVolumeMl += reqVolLiters * 1000;
+        addMl = reqVolLiters * 1000;
+        totalSoluteVolumeMl += addMl;
       }
+      components.push({ name, type, addMl });
     } else {
       const mw = +(row.querySelector('.comp-mw').value || 0);
+      let addGrams = 0;
       if (mw > 0) {
-        const reqMassGrams = desiredConc * v * mw;
-        totalMassGrams += reqMassGrams;
-        // Approximate volume displacement or count it toward solute tracking if needed
+        addGrams = desiredConc * v * mw;
+        totalMassGrams += addGrams;
       }
+      components.push({ name, type, addGrams });
     }
   });
 
   const totalMl = v * 1000;
   const solventMl = Math.max(0, totalMl - totalSoluteVolumeMl);
+  return { components, totalMl, totalSoluteVolumeMl, totalMassGrams, solventMl };
+}
+
+function updateBuffer() {
+  const { components, totalMl, totalSoluteVolumeMl, totalMassGrams, solventMl } = computeBufferBreakdown();
+
+  const rows = components.map(c => {
+    const amount = c.type === 'stock' ? formatVolumeMl(c.addMl) : c.addGrams.toFixed(3) + ' g';
+    return `<div class="buffer-summary-component"><span>${c.name}</span><b>${amount}</b></div>`;
+  }).join('');
 
   document.querySelector('#buffer-summary').innerHTML = `
+    ${rows}
     <div><span>Final volume</span><b>${totalMl.toFixed(2)} mL</b></div>
     <div><span>Stock added</span><b>${totalSoluteVolumeMl.toFixed(2)} mL</b> | <b>${totalMassGrams.toFixed(3)} g</b> powder</div>
-    <div><span>Solvent (Water/Buffer)</span><b>${solventMl.toFixed(2)} mL</b></div>
+    <div><span>Solvent (Water/Buffer)</span><b>${formatVolumeMl(solventMl)}</b></div>
   `;
 }
 
 ['buffer-volume', 'buffer-unit'].forEach(id => document.querySelector('#' + id).oninput = updateBuffer);
     function saveBuffer(){
       const name = document.querySelector('#buffer-name').value.trim() || 'Medium / Buffer';
-      const desc = document.querySelector('#buffer-description')?.value.trim() || 'Medium / Buffer recipe';
+      const { components, solventMl } = computeBufferBreakdown();
+      const lines = components.map((c, i) => {
+        const amount = c.type === 'stock' ? formatVolumeMl(c.addMl) + ' of stock' : c.addGrams.toFixed(3) + ' g powder';
+        return `Component ${i + 1} (${c.name}): ${amount}`;
+      });
+      lines.push(`Buffer/Solvent: ${formatVolumeMl(solventMl)}`);
+      const desc = lines.join('\n');
       protocols.unshift({
         id: 'p' + (++protocolSeq),
         name,
@@ -826,12 +857,66 @@ function updateBuffer() {
       dateEl.textContent = new Date().toLocaleDateString('en-US', options).toUpperCase();
     }
 
+  // ---- Home notes + tasks: real JS state (not just DOM), so it can sync to
+  // Firebase the same way protocols do. ----
+  let homeData = { notes: '', tasks: [] }; // tasks: [{ text, done }]
+  let homeTaskSeq = 0;
+
+  function renderHomeNotes() {
+    const area = document.querySelector('#home-notes');
+    if (document.activeElement !== area) area.value = homeData.notes;
+  }
+  function renderHomeTasks() {
+    const list = document.querySelector('#task-list');
+    list.innerHTML = '';
+    homeData.tasks.forEach((task, i) => {
+      const el = document.createElement('div');
+      el.className = 'task' + (task.done ? ' done' : '');
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'space-between';
+      el.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+          <div class="check"></div>
+          <span style="word-break: break-word;">${task.text}</span>
+        </div>
+        <button class="small-btn remove-task" style="background: #ffe2e2; margin-left: 8px;">−</button>
+      `;
+      el.querySelector('.check').onclick = () => { task.done = !task.done; renderHomeTasks(); homeDataChanged(); };
+      el.querySelector('span').onclick = () => { task.done = !task.done; renderHomeTasks(); homeDataChanged(); };
+      el.querySelector('.remove-task').onclick = () => { homeData.tasks.splice(i, 1); renderHomeTasks(); homeDataChanged(); };
+      list.append(el);
+    });
+    updateTaskCount();
+  }
+  // Cloud sync bridge, mirroring window.onProtocolsChanged for protocols.
+  // window.onHomeDataChanged is only defined once Firebase has loaded, and
+  // no-ops while nobody is signed in, so this is always safe to call.
+  function homeDataChanged() {
+    if (typeof window.onHomeDataChanged === 'function') window.onHomeDataChanged(homeData);
+  }
+  // Lets the Firebase module replace local state with a signed-in user's
+  // cloud copy (on sign-in), the same way window.replaceAllProtocols does.
+  window.replaceHomeData = function (nextHomeData) {
+    homeData = (nextHomeData && typeof nextHomeData === 'object')
+      ? { notes: nextHomeData.notes || '', tasks: Array.isArray(nextHomeData.tasks) ? nextHomeData.tasks : [] }
+      : { notes: '', tasks: [] };
+    renderHomeNotes();
+    renderHomeTasks();
+  };
+  window.getCurrentHomeData = function () { return homeData; };
+
+  document.querySelector('#home-notes').addEventListener('input', (e) => {
+    homeData.notes = e.target.value;
+    homeDataChanged();
+  });
+
   // Task Counting Logic
 function updateTaskCount() {
-  const tasks = document.querySelectorAll('#task-list .task');
-  const doneTasks = document.querySelectorAll('#task-list .task.done');
+  const tasks = homeData.tasks;
+  const doneTasks = tasks.filter(t => t.done);
   const taskCountDisplay = document.querySelector('#task-count');
-  
+
   if (tasks.length > 0) {
     taskCountDisplay.textContent = `${String(doneTasks.length).padStart(2, '0')} / ${String(tasks.length).padStart(2, '0')}`;
   } else {
@@ -839,45 +924,13 @@ function updateTaskCount() {
   }
 }
 
-// Unified Click Listener for Tasks (Handles completion toggle & removal)
-document.querySelector('#task-list').addEventListener('click', (e) => {
-  // Handle remove button click
-  const removeBtn = e.target.closest('.remove-task');
-  if (removeBtn) {
-    removeBtn.closest('.task').remove();
-    updateTaskCount();
-    return;
-  }
-  
-  // Handle task completion toggle
-  const task = e.target.closest('.task');
-  if (task) {
-    task.classList.toggle('done');
-    updateTaskCount();
-  }
-});
-
-// Add New Task via Input (Includes the minus remove button)
+// Add New Task via Input
 document.querySelector('#new-task-input').addEventListener('keypress', (e) => {
   if (e.key === 'Enter' && e.target.value.trim() !== '') {
-    const taskList = document.querySelector('#task-list');
-    const newTask = document.createElement('div');
-    newTask.className = 'task';
-    newTask.style.display = 'flex';
-    newTask.style.alignItems = 'center';
-    newTask.style.justifyContent = 'space-between';
-    
-    newTask.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
-        <div class="check"></div>
-        <span style="word-break: break-word;">${e.target.value.trim()}</span>
-      </div>
-      <button class="small-btn remove-task" style="background: #ffe2e2; margin-left: 8px;">−</button>
-    `;
-    
-    taskList.append(newTask);
+    homeData.tasks.push({ id: 'ht' + (++homeTaskSeq), text: e.target.value.trim(), done: false });
     e.target.value = ''; // Clear input field
-    updateTaskCount();
+    renderHomeTasks();
+    homeDataChanged();
   }
 });
 
@@ -895,4 +948,5 @@ document.querySelectorAll('[data-group="sidebar"] .tool-tab').forEach(tab => {
 });
 
 // Run once on load
-updateTaskCount();
+renderHomeNotes();
+renderHomeTasks();

@@ -67,7 +67,7 @@
     .check { width: 17px; height: 17px; border: 2px solid var(--ink); border-radius: 4px; background: transparent; flex: 0 0 auto; }
     .task.done .check { background: var(--ink); box-shadow: inset 0 0 0 3px var(--lime); }
     .task.done span { text-decoration: line-through; opacity: .62; }
-    .note-tabs { display:flex; gap:5px; margin-bottom:10px; }.note-tab { border:1.5px solid var(--ink); border-radius:4px; padding:6px 8px; background:transparent; font:inherit; font-size:10px; font-weight:bold; }.note-tab.active { background:var(--ink); color:var(--lime); }.note-view { display:none; }.note-view.active { display:block; }.note-area { width:100%; min-height:125px; resize:vertical; padding:9px; border:1.5px solid var(--ink); border-radius:5px; background:rgba(255,255,255,.7); font:inherit; font-size:12px; line-height:1.5; }.checklist { display:grid; gap:5px; }.check-item { display:grid; grid-template-columns:auto 1fr auto; gap:7px; align-items:center; padding:6px; border-bottom:1px solid rgba(24,32,52,.25); }.check-item input[type="text"] { min-width:0; border:0; border-bottom:1px solid rgba(24,32,52,.5); background:transparent; padding:4px; font:inherit; font-size:12px; }.check-item input[type="checkbox"] { accent-color:var(--ink); }.remove-check { border:0; background:transparent; font-weight:bold; color:var(--ink); }.add-check { margin-top:9px; border:1.5px dashed var(--ink); border-radius:4px; background:rgba(255,255,255,.45); padding:7px; font:inherit; font-size:10px; font-weight:bold; }
+    .note-tabs { display:flex; gap:5px; margin-bottom:10px; }.note-tab { border:1.5px solid var(--ink); border-radius:4px; padding:6px 8px; background:transparent; font:inherit; font-size:10px; font-weight:bold; }.note-tab.active { background:var(--ink); color:var(--lime); }.note-view { display:none; }.note-view.active { display:block; }.note-area { width:100%; min-height:125px; resize:vertical; padding:9px; border:1.5px solid var(--ink); border-radius:5px; background:rgba(255,255,255,.7); font:inherit; font-size:13px; line-height:1.5; }.checklist { display:grid; gap:5px; }.check-item { display:grid; grid-template-columns:auto 1fr auto; gap:7px; align-items:center; padding:6px; border-bottom:1px solid rgba(24,32,52,.25); }.check-item input[type="text"] { min-width:0; border:0; border-bottom:1px solid rgba(24,32,52,.5); background:transparent; padding:4px; font:inherit; font-size:12px; }.check-item input[type="checkbox"] { accent-color:var(--ink); }.remove-check { border:0; background:transparent; font-weight:bold; color:var(--ink); }.add-check { margin-top:9px; border:1.5px dashed var(--ink); border-radius:4px; background:rgba(255,255,255,.45); padding:7px; font:inherit; font-size:10px; font-weight:bold; }
     .tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .tool { border: 1.5px solid var(--ink); border-radius: 6px; padding: 13px 6px 10px; background: white; text-align: center; transition: transform .15s; }
     @media (hover: hover) { .tool:hover { transform: translateY(-3px); background: #fffaf0; } }
@@ -181,6 +181,10 @@
     .buffer-summary div:last-child {
       border: 0;
       font-weight: bold;
+    }
+    .buffer-summary-component:last-of-type {
+      border-bottom: 2px solid #59c889;
+      margin-bottom: 2px;
     }
     .component-list {
       display: grid;
@@ -304,7 +308,7 @@
     .proto-add-step-btn { width: 100%; border: 1.5px dashed var(--ink); border-radius: 7px; background: rgba(118,85,231,.06); padding: 11px; font: inherit; font-size: 12px; font-weight: bold; color: var(--purple); }
     .proto-notes-block { margin-top: 16px; padding-top: 14px; border-top: 1.5px solid var(--line); }
     .proto-notes-label { display: block; margin-bottom: 6px; font-size: 10px; font-weight: bold; color: var(--muted); letter-spacing: .06em; }
-    .proto-notes-area { width: 100%; border: 1.5px solid var(--ink); border-radius: 6px; padding: 10px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink); background: #fff; resize: vertical; min-height: 60px; }
+    .proto-notes-area { width: 100%; border: 1.5px solid var(--ink); border-radius: 6px; padding: 10px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: #fff; resize: vertical; min-height: 60px; }
     @media (max-width: 720px) {
       .app { padding: 20px 16px 110px; }
       .topbar { margin-bottom: 30px; }
