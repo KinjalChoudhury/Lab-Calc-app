@@ -109,6 +109,14 @@
       // no-ops while nobody is signed in, so this is always safe to call.
       if (typeof window.onProtocolsChanged === 'function') window.onProtocolsChanged(protocols);
     }
+    // Triggers the same cloud-sync bridge as renderProtocolLists(), without
+    // rebuilding the home/archive card DOM. Used for edits that only change
+    // data already in memory (protocol notes, step descriptions) so a save
+    // still fires when the field loses focus, without disrupting whatever
+    // the user is doing in the editor mid-edit.
+    function syncProtocolsToCloud() {
+      if (typeof window.onProtocolsChanged === 'function') window.onProtocolsChanged(protocols);
+    }
     function deleteProtocol(id) {
       if (!confirm('Delete this protocol? This cannot be undone.')) return;
       protocols = protocols.filter(p => p.id !== id);
@@ -151,6 +159,7 @@
       const notesArea = document.querySelector('#editor-notes');
       if (document.activeElement !== notesArea) notesArea.value = proto.notes;
       notesArea.oninput = e => { proto.notes = e.target.value; };
+      notesArea.onblur = () => syncProtocolsToCloud();
 
       const wrap = document.querySelector('#editor-steps');
       wrap.innerHTML = '';
@@ -173,6 +182,7 @@
         el.querySelector('.proto-step-name').oninput = e => { step.name = e.target.value; };
         el.querySelector('.proto-step-name').onblur = () => renderProtocolLists();
         el.querySelector('.proto-step-desc').oninput = e => { step.description = e.target.value; };
+        el.querySelector('.proto-step-desc').onblur = () => syncProtocolsToCloud();
         el.querySelector('.proto-step-del').onclick = () => { proto.steps.splice(i, 1); renderProtocolEditor(); renderProtocolLists(); };
         el.querySelector('.proto-refer-btn').onclick = () => openToolPicker(proto, i);
         const toolsWrap = el.querySelector('.proto-step-tools');
@@ -951,23 +961,10 @@ function updateBuffer() {
     const aaRoot=document.querySelector('#amino-acids');aminoGroups.forEach(([title,color,items])=>{const section=document.createElement('div');section.className='aa-category';section.style.setProperty('--aa-color',color);section.innerHTML=`<button>${title}<span>${items.length} amino acids +</span></button><div class="aa-list"></div>`;section.querySelector('button').onclick=()=>section.classList.toggle('open');items.forEach(([name,one,three,mass])=>{const card=document.createElement('article');card.className='aa-card';card.innerHTML=`<b>${name}</b><div class="aa-codes"><span>${one}</span><span>${three}</span></div><div class="aa-mass">Molar mass: <b>${mass} g/mol</b></div>`;section.querySelector('.aa-list').append(card)});aaRoot.append(section)});
 
     // ---- Media / Buffers library subsections ----
-    // Same collapsible-category visual pattern as the amino acid list above,
-    // generalized under `.subsection`/`.subsection-list` so it isn't tied to
-    // amino-acid-specific naming. Composition entries are added later —
-    // for now each category just opens to an empty list.
-    const mediaBufferGroups = [
-      ['Media', '#c9f3b4', []],
-      ['Buffers', '#bae3ff', []]
-    ];
-    const mediaBufferRoot = document.querySelector('#media-buffers');
-    mediaBufferGroups.forEach(([title, color, items]) => {
-      const section = document.createElement('div');
-      section.className = 'subsection';
-      section.style.setProperty('--subsection-color', color);
-      section.innerHTML = `<button>${title}<span>${items.length} recipes +</span></button><div class="subsection-list"></div>`;
-      section.querySelector('button').onclick = () => section.classList.toggle('open');
-      mediaBufferRoot.append(section);
-    });
+    // Rendering logic lives in media-buffers.js (loaded as a separate script),
+    // reading its data from media-buffers-data.js. This keeps the composition
+    // data and its rendering out of the main app bundle, per request.
+    if (typeof renderMediaBuffers === 'function') renderMediaBuffers();
     const codons={Phe:'UUU UUC',Leu:'UUA UUG CUU CUC CUA CUG',Ile:'AUU AUC AUA',Met:'AUG',Val:'GUU GUC GUA GUG',Ser:'UCU UCC UCA UCG AGU AGC',Pro:'CCU CCC CCA CCG',Thr:'ACU ACC ACA ACG',Ala:'GCU GCC GCA GCG',Tyr:'UAU UAC',Stop:'UAA UAG UGA',His:'CAU CAC',Gln:'CAA CAG',Asn:'AAU AAC',Lys:'AAA AAG',Asp:'GAU GAC',Glu:'GAA GAG',Cys:'UGU UGC',Trp:'UGG',Arg:'CGU CGC CGA CGG AGA AGG',Gly:'GGU GGC GGA GGG'};Object.entries(codons).forEach(([aa,list])=>list.split(' ').forEach(c=>{const x=document.createElement('div');x.className='codon '+(aa==='Stop'?'stop':'');x.innerHTML=`<b>${c}</b>${aa}`;document.querySelector('#codon-chart').append(x)}));
     const symbols=['H','He','Li','Be','B','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','I','Xe','Cs','Ba','La','Ce','Pr','Nd','Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn','Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt','Ds','Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og'];
     const periodRows=[['H','','','','','','','','','','','','','','','','','He'],['Li','Be','','','','','','','','','','','B','C','N','O','F','Ne'],['Na','Mg','','','','','','','','','','','Al','Si','P','S','Cl','Ar'],['K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr'],['Rb','Sr','Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','I','Xe'],['Cs','Ba','','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn'],['Fr','Ra','','Rf','Db','Sg','Bh','Hs','Mt','Ds','Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og']];
