@@ -96,7 +96,7 @@
           <h2>05 — Medium / Buffer maker</h2>
           <div class="buffer-layout">
             <div>
-              <p class="formula">Prepare components using either <code>Stock Solutions</code> ($C_1V_1 = C_2V_2$) or <code>Powder</code> ($mass = M \times V \times MW$).</p>
+              <p class="formula">Prepare components using either <code>Stock Solutions</code> (C₁V₁ = C₂V₂) or <code>Powder</code> (mass = M × V × MW).</p>
               <div class="calc-form">
                 <label class="field">
                   RECIPE NAME
@@ -111,9 +111,10 @@
                 </label>
               </div>
               <div id="components" class="component-list"></div>
-              <button class="small-btn" style="margin-top:10px" onclick="addComponent('stock')">+ ADD STOCK COMPONENT</button>
-              <button class="small-btn" style="margin-top:10px; margin-left: 5px;" onclick="addComponent('powder')">+ ADD POWDER COMPONENT</button>
+              <button class="small-btn component-add-btn" style="margin-top:10px" onclick="addComponent('stock')">+ ADD STOCK COMPONENT</button>
+              <button class="small-btn component-add-btn" style="margin-top:10px; margin-left: 5px;" onclick="addComponent('powder')">+ ADD POWDER COMPONENT</button>
               <button class="action" style="float:right;margin-top:10px" onclick="saveBuffer()">SAVE AS PROTOCOL</button>
+              <button class="action" style="float:right;margin-top:10px;margin-right:8px;background:#fff" onclick="openProtocolPicker()">+ ADD TO EXISTING PROTOCOL</button>
             </div>
             <div class="buffer-summary" id="buffer-summary">
               <div><span>Final volume</span><b>0 mL</b></div>
@@ -318,6 +319,16 @@
       <p class="formula">Select any tools relevant to this step. They'll be listed under it for quick reference.</p>
       <div id="tool-picker-list" class="proto-tool-list"></div>
       <button class="action span-all" style="width:100%" onclick="closeToolPicker()">DONE</button>
+    </div>
+  </div>
+
+  <!-- Add recipe as a step of an existing protocol -->
+  <div id="protocol-picker-modal" class="proto-modal" onclick="if(event.target===this)closeProtocolPicker()">
+    <div class="proto-sheet">
+      <div class="proto-sheet-head"><h2>Add to a protocol</h2><button class="proto-close" onclick="closeProtocolPicker()">×</button></div>
+      <p class="formula">Choose an existing protocol — this recipe will be added as a new step.</p>
+      <div id="protocol-picker-list" class="proto-tool-list"></div>
+      <button class="action span-all" style="width:100%;background:#fff" onclick="closeProtocolPicker()">CANCEL</button>
     </div>
   </div>
 

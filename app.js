@@ -488,15 +488,18 @@ function updateBuffer() {
 }
 
 ['buffer-volume', 'buffer-unit'].forEach(id => document.querySelector('#' + id).oninput = updateBuffer);
-    function saveBuffer(){
-      const name = document.querySelector('#buffer-name').value.trim() || 'Medium / Buffer';
+    function buildBufferStepDescription() {
       const { components, solventMl } = computeBufferBreakdown();
       const lines = components.map((c, i) => {
         const amount = c.type === 'stock' ? formatVolumeMl(c.addMl) + ' of stock' : c.addGrams.toFixed(3) + ' g powder';
         return `Component ${i + 1} (${c.name}): ${amount}`;
       });
       lines.push(`Buffer/Solvent: ${formatVolumeMl(solventMl)}`);
-      const desc = lines.join('\n');
+      return lines.join('\n');
+    }
+    function saveBuffer(){
+      const name = document.querySelector('#buffer-name').value.trim() || 'Medium / Buffer';
+      const desc = buildBufferStepDescription();
       protocols.unshift({
         id: 'p' + (++protocolSeq),
         name,
@@ -505,6 +508,36 @@ function updateBuffer() {
       });
       renderProtocolLists();
       alert('Recipe saved as a protocol.');
+    }
+    function openProtocolPicker() {
+      const list = document.querySelector('#protocol-picker-list');
+      list.innerHTML = '';
+      if (!protocols.length) {
+        list.innerHTML = '<p class="formula" style="margin:0">No protocols yet — create one first from the Protocol tab, or use SAVE AS PROTOCOL instead.</p>';
+      } else {
+        protocols.forEach(proto => {
+          const row = document.createElement('label');
+          row.className = 'proto-tool-option';
+          row.style.cursor = 'pointer';
+          row.innerHTML = `<span>${proto.name}</span>`;
+          row.onclick = () => addBufferStepToProtocol(proto.id);
+          list.appendChild(row);
+        });
+      }
+      document.querySelector('#protocol-picker-modal').classList.add('open');
+    }
+    function closeProtocolPicker() {
+      document.querySelector('#protocol-picker-modal').classList.remove('open');
+    }
+    function addBufferStepToProtocol(protoId) {
+      const proto = protocols.find(p => p.id === protoId);
+      if (!proto) return;
+      const name = document.querySelector('#buffer-name').value.trim() || 'Medium / Buffer';
+      const desc = buildBufferStepDescription();
+      proto.steps.push({ name: `Prepare recipe: ${name}`, description: desc, done: true, tools: ['Medium / Buffer maker'] });
+      closeProtocolPicker();
+      renderProtocolLists();
+      alert(`Recipe added as a new step in "${proto.name}".`);
     }
     function calcMolesVolume(){const n=num('mv-n')*unitFactor[unit('mv-nu')],v=num('mv-v')*unitFactor[unit('mv-vu')];if(!n||!v)return;const m=n/v;show('mv-result',`Molarity: <b>${m.toPrecision(6)} M</b> (${(m*1e3).toPrecision(5)} mM).`)}
     function calcMassMW(){const mass=num('mm-mass')*unitFactor[unit('mm-massu')],mw=num('mm-mw'),v=num('mm-vol')*unitFactor[unit('mm-volu')];if(!mass||!mw||!v)return;const m=mass/(mw*v);show('mm-result',`Molarity: <b>${m.toPrecision(6)} M</b> (${(m*1e3).toPrecision(5)} mM).`)}

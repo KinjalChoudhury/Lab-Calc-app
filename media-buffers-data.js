@@ -446,7 +446,7 @@ const MEDIA_BUFFERS_DATA = [
     basis: '100 mL',
     ph: '7.0–7.4',
     components: [
-      { name: 'DMEM powder (high-glucose, with L-glutamine)', amount: '1.0 pack per 1 L (≈0.1 pack/100 mL)', molarMass: null },
+      { name: 'DMEM powder (high-glucose, with L-glutamine)', amount: '1/10 of a 1 L powder pack', molarMass: null },
       { name: 'NaHCO3', amount: '0.37 g', molarMass: '84.01 g/mol' },
       { name: 'Distilled water', amount: 'to 100 mL', molarMass: null }
     ],
@@ -459,7 +459,7 @@ const MEDIA_BUFFERS_DATA = [
     basis: '100 mL',
     ph: '7.0–7.4',
     components: [
-      { name: 'RPMI-1640 powder', amount: '1.0 pack per 1 L (≈0.1 pack/100 mL)', molarMass: null },
+      { name: 'RPMI-1640 powder', amount: '1/10 of a 1 L powder pack', molarMass: null },
       { name: 'NaHCO3', amount: '0.2 g', molarMass: '84.01 g/mol' },
       { name: 'Distilled water', amount: 'to 100 mL', molarMass: null }
     ],
@@ -472,7 +472,7 @@ const MEDIA_BUFFERS_DATA = [
     basis: '100 mL',
     ph: '7.0–7.4',
     components: [
-      { name: 'MEM powder (with Earle\'s salts)', amount: '1.0 pack per 1 L (≈0.1 pack/100 mL)', molarMass: null },
+      { name: 'MEM powder (with Earle\'s salts)', amount: '1/10 of a 1 L powder pack', molarMass: null },
       { name: 'NaHCO3', amount: '0.22 g', molarMass: '84.01 g/mol' },
       { name: 'Distilled water', amount: 'to 100 mL', molarMass: null }
     ],
@@ -485,7 +485,7 @@ const MEDIA_BUFFERS_DATA = [
     basis: '100 mL',
     ph: '7.0–7.4',
     components: [
-      { name: 'DMEM/F-12 powder (1:1 mix)', amount: '1.0 pack per 1 L (≈0.1 pack/100 mL)', molarMass: null },
+      { name: 'DMEM/F-12 powder (1:1 mix)', amount: '1/10 of a 1 L powder pack', molarMass: null },
       { name: 'NaHCO3', amount: '0.24 g', molarMass: '84.01 g/mol' },
       { name: 'Distilled water', amount: 'to 100 mL', molarMass: null }
     ],
@@ -498,7 +498,7 @@ const MEDIA_BUFFERS_DATA = [
     basis: '100 mL',
     ph: '7.0–7.4',
     components: [
-      { name: 'IMDM powder', amount: '1.0 pack per 1 L (≈0.1 pack/100 mL)', molarMass: null },
+      { name: 'IMDM powder', amount: '1/10 of a 1 L powder pack', molarMass: null },
       { name: 'NaHCO3', amount: '0.37 g', molarMass: '84.01 g/mol' },
       { name: 'Distilled water', amount: 'to 100 mL', molarMass: null }
     ],
